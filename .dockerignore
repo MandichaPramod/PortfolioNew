@@ -1,0 +1,13 @@
+bin/
+obj/
+.vs/
+.vscode/
+.git/
+.gitignore
+README*
+**/*.user
+**/*.suo
+**/*.cache
+**/*.log
+node_modules/
+Properties/launchSettings.json

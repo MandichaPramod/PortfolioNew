@@ -1,0 +1,272 @@
+@model PortfolioNew.Models.RealisedPnLResponseModel
+@{
+    ViewData["Title"] = "Realised P&L";
+
+    string SafeId(string value) => new string((value ?? "").Where(char.IsLetterOrDigit).ToArray());
+
+    List<PortfolioNew.Models.RealisedPnLRow> AggregateStocks(IEnumerable<PortfolioNew.Models.RealisedPnLRow> rows)
+    {
+        return rows
+            .GroupBy(r => r.Symbol, StringComparer.OrdinalIgnoreCase)
+            .Select(g =>
+            {
+                var first = g.First();
+                var qty = g.Sum(x => x.Quantity);
+                var totalCost = g.Sum(x => x.TotalCost);
+                var sellValue = g.Sum(x => x.SellValue);
+                return new PortfolioNew.Models.RealisedPnLRow
+                {
+                    Symbol = first.Symbol,
+                    Name = first.Name,
+                    Quantity = qty,
+                    BuyPrice = qty > 0 ? totalCost / qty : 0,
+                    SellPrice = qty > 0 ? sellValue / qty : 0,
+                    Dividend = g.Sum(x => x.Dividend),
+                    TotalCost = totalCost,
+                    SellValue = sellValue,
+                    PnL = g.Sum(x => x.PnL),
+                    PnLAfterCharges = g.Sum(x => x.PnLAfterCharges),
+                    TotalCharges = g.Sum(x => x.TotalCharges)
+                };
+            })
+            .OrderBy(x => x.Name)
+            .ToList();
+    }
+}
+
+<div class="container-fluid dashboard-container pt-4">
+    <ul class="nav nav-tabs mb-3" role="tablist">
+        @for (var i = 0; i < Model.Sections.Count; i++)
+        {
+            var section = Model.Sections[i];
+            <li class="nav-item" role="presentation">
+                <button class="nav-link @(i == 0 ? "active" : "")" data-bs-toggle="tab" data-bs-target="#pane-@(section.Key)" type="button" role="tab">@(section.Label)</button>
+            </li>
+        }
+    </ul>
+
+    <div class="tab-content">
+        @for (var i = 0; i < Model.Sections.Count; i++)
+        {
+            var section = Model.Sections[i];
+            <div class="tab-pane fade @(i == 0 ? "show active" : "")" id="pane-@(section.Key)" role="tabpanel">
+                <div class="summary-dashboard mb-3">
+                    <div class="summary-item"><div class="stat-card"><div class="stat-label">Total Cost</div><div class="stat-value">₹@Math.Round(section.Summary.TotalCost, 0).ToString("N0")</div></div></div>
+                    <div class="summary-item"><div class="stat-card"><div class="stat-label">Sell Value</div><div class="stat-value">₹@Math.Round(section.Summary.SellValue, 0).ToString("N0")</div></div></div>
+                    <div class="summary-item"><div class="stat-card @(section.Summary.PnL > 0 ? "stat-card-success" : "stat-card-danger")"><div class="stat-label">Realised P&L</div><div class="stat-value">₹@Math.Round(section.Summary.PnL, 0).ToString("N0")</div><div class="stat-meta">@Math.Round(section.Summary.PnLPercent, 2)%</div></div></div>
+                    <div class="summary-item"><div class="stat-card @(section.Summary.PnLAfterCharges > 0 ? "stat-card-success" : "stat-card-danger")"><div class="stat-label">PnL After Charges</div><div class="stat-value">₹@Math.Round(section.Summary.PnLAfterCharges, 0).ToString("N0")</div><div class="stat-meta">@Math.Round(section.Summary.PnLAfterChargesPercent, 2)%</div></div></div>
+                    <div class="summary-item"><div class="stat-card"><div class="stat-label">Total Charges</div><div class="stat-value">₹@Math.Round(section.Summary.TotalCharges, 0).ToString("N0")</div></div></div>
+                </div>
+
+                <ul class="nav nav-tabs mb-2" role="tablist">
+                    <li class="nav-item" role="presentation"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#@(section.Key)-trades" type="button">Trades</button></li>
+                    <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#@(section.Key)-stocks" type="button">Stock Wise</button></li>
+                    <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#@(section.Key)-yearly" type="button">Yearly</button></li>
+                    <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#@(section.Key)-monthly" type="button">Monthly</button></li>
+                </ul>
+
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="@(section.Key)-trades">
+                        <div class="modern-card mb-4"><div class="card-body p-0"><div class="table-host">
+                            <table class="table table-hover realised-table" id="table-@(section.Key)-trades">
+                                <thead><tr><th>Account</th><th>Name</th><th>Sell Date</th><th class="text-end">Qty</th><th class="text-end">Buy Price</th><th class="text-end">Sell Price</th><th class="text-end">Dividend</th><th class="text-end">Total Cost</th><th class="text-end">Sell Value</th><th class="text-end">P&L</th><th class="text-end">P&L After Charges</th><th class="text-end">Charges</th></tr></thead>
+                                <tbody>
+                                @foreach (var row in section.Trades)
+                                {
+                                    <tr>
+                                        <td>@row.Account</td>
+                                        <td>@row.Name <small class="text-muted">(@row.Symbol)</small></td>
+                                        <td>@(row.SellDate == DateTime.MinValue ? "-" : row.SellDate.ToString("dd MMM yyyy"))</td>
+                                        <td class="text-end">@Math.Round(row.Quantity, 4)</td>
+                                        <td class="text-end">@Math.Round(row.BuyPrice, 2)</td>
+                                        <td class="text-end">@Math.Round(row.SellPrice, 2)</td>
+                                        <td class="text-end">@Math.Round(row.Dividend, 2)</td>
+                                        <td class="text-end">@Math.Round(row.TotalCost, 2)</td>
+                                        <td class="text-end">@Math.Round(row.SellValue, 2)</td>
+                                        <td class="text-end @(row.PnL >= 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(row.PnL, 2)</td>
+                                        <td class="text-end @(row.PnLAfterCharges >= 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(row.PnLAfterCharges, 2)</td>
+                                        <td class="text-end">@Math.Round(row.TotalCharges, 2)</td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                        </div></div></div>
+                    </div>
+
+                    <div class="tab-pane fade" id="@(section.Key)-stocks">
+                        <div class="modern-card mb-4"><div class="card-body p-0"><div class="table-host">
+                            <table class="table table-hover realised-table" id="table-@(section.Key)-stocks">
+                                <thead><tr><th>Name</th><th class="text-end">Qty</th><th class="text-end">Buy Avg</th><th class="text-end">Sell Avg</th><th class="text-end">Dividend</th><th class="text-end">Total Cost</th><th class="text-end">Sell Value</th><th class="text-end">P&L</th><th class="text-end">P&L After Charges</th><th class="text-end">Charges</th></tr></thead>
+                                <tbody>
+                                @foreach (var row in section.Stocks)
+                                {
+                                    var stockModalId = $"stockModal_{SafeId(section.Key)}_{SafeId(row.Symbol)}";
+                                    <tr>
+                                        <td><a href="#" class="text-decoration-none" data-bs-toggle="modal" data-bs-target="#@stockModalId">@row.Name <small class="text-muted">(@row.Symbol)</small></a></td>
+                                        <td class="text-end">@Math.Round(row.Quantity, 4)</td>
+                                        <td class="text-end">@Math.Round(row.BuyPrice, 2)</td>
+                                        <td class="text-end">@Math.Round(row.SellPrice, 2)</td>
+                                        <td class="text-end">@Math.Round(row.Dividend, 2)</td>
+                                        <td class="text-end">@Math.Round(row.TotalCost, 2)</td>
+                                        <td class="text-end">@Math.Round(row.SellValue, 2)</td>
+                                        <td class="text-end @(row.PnL >= 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(row.PnL, 2)</td>
+                                        <td class="text-end @(row.PnLAfterCharges >= 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(row.PnLAfterCharges, 2)</td>
+                                        <td class="text-end">@Math.Round(row.TotalCharges, 2)</td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                        </div></div></div>
+                    </div>
+
+                    <div class="tab-pane fade" id="@(section.Key)-yearly">
+                        <div class="modern-card mb-4"><div class="card-body p-0"><div class="table-host">
+                            <table class="table table-hover realised-table" id="table-@(section.Key)-yearly">
+                                <thead><tr><th>Year</th><th class="text-end">Dividend</th><th class="text-end">Total Cost</th><th class="text-end">Sell Value</th><th class="text-end">P&L</th><th class="text-end">P&L After Charges</th><th class="text-end">Charges</th></tr></thead>
+                                <tbody>
+                                @foreach (var row in section.Yearly)
+                                {
+                                    var yearlyModalId = $"yearModal_{SafeId(section.Key)}_{row.SellDate.Year}";
+                                    <tr>
+                                        <td><a href="#" class="text-decoration-none" data-bs-toggle="modal" data-bs-target="#@yearlyModalId">@row.SellDate.Year</a></td>
+                                        <td class="text-end">@Math.Round(row.Dividend, 2)</td>
+                                        <td class="text-end">@Math.Round(row.TotalCost, 2)</td>
+                                        <td class="text-end">@Math.Round(row.SellValue, 2)</td>
+                                        <td class="text-end @(row.PnL >= 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(row.PnL, 2)</td>
+                                        <td class="text-end @(row.PnLAfterCharges >= 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(row.PnLAfterCharges, 2)</td>
+                                        <td class="text-end">@Math.Round(row.TotalCharges, 2)</td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                        </div></div></div>
+                    </div>
+
+                    <div class="tab-pane fade" id="@(section.Key)-monthly">
+                        <div class="modern-card mb-4"><div class="card-body p-0"><div class="table-host">
+                            <table class="table table-hover realised-table" id="table-@(section.Key)-monthly">
+                                <thead><tr><th>Month</th><th class="text-end">Dividend</th><th class="text-end">Total Cost</th><th class="text-end">Sell Value</th><th class="text-end">P&L</th><th class="text-end">P&L After Charges</th><th class="text-end">Charges</th></tr></thead>
+                                <tbody>
+                                @foreach (var row in section.Monthly)
+                                {
+                                    var monthlyModalId = $"monthModal_{SafeId(section.Key)}_{row.SellDate:yyyyMM}";
+                                    <tr>
+                                        <td><a href="#" class="text-decoration-none" data-bs-toggle="modal" data-bs-target="#@monthlyModalId">@row.SellDate.ToString("MMM yyyy")</a></td>
+                                        <td class="text-end">@Math.Round(row.Dividend, 2)</td>
+                                        <td class="text-end">@Math.Round(row.TotalCost, 2)</td>
+                                        <td class="text-end">@Math.Round(row.SellValue, 2)</td>
+                                        <td class="text-end @(row.PnL >= 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(row.PnL, 2)</td>
+                                        <td class="text-end @(row.PnLAfterCharges >= 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(row.PnLAfterCharges, 2)</td>
+                                        <td class="text-end">@Math.Round(row.TotalCharges, 2)</td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                        </div></div></div>
+                    </div>
+                </div>
+
+                @foreach (var row in section.Stocks)
+                {
+                    var stockModalId = $"stockModal_{SafeId(section.Key)}_{SafeId(row.Symbol)}";
+                    var stockTrades = section.Trades.Where(t => string.Equals(t.Symbol, row.Symbol, StringComparison.OrdinalIgnoreCase)).OrderByDescending(t => t.SellDate).ToList();
+                    <div class="modal fade portfolio-modal realised-modal" id="@stockModalId" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">@row.Name (@row.Symbol) - Transaction Breakdown</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body p-0"><div class="table-host">
+                            <table class="table table-hover mb-0 realised-modal-table">
+                                <thead><tr><th>Account</th><th>Sell Date</th><th class="text-end">Qty</th><th class="text-end">Buy Price</th><th class="text-end">Sell Price</th><th class="text-end">Dividend</th><th class="text-end">Total Cost</th><th class="text-end">Sell Value</th><th class="text-end">P&L</th><th class="text-end">P&L After Charges</th><th class="text-end">Charges</th></tr></thead>
+                                <tbody>
+                                @foreach (var tr in stockTrades)
+                                {
+                                    <tr>
+                                        <td>@tr.Account</td><td>@(tr.SellDate == DateTime.MinValue ? "-" : tr.SellDate.ToString("dd MMM yyyy"))</td>
+                                        <td class="text-end">@Math.Round(tr.Quantity, 4)</td><td class="text-end">@Math.Round(tr.BuyPrice, 2)</td><td class="text-end">@Math.Round(tr.SellPrice, 2)</td>
+                                        <td class="text-end">@Math.Round(tr.Dividend, 2)</td><td class="text-end">@Math.Round(tr.TotalCost, 2)</td><td class="text-end">@Math.Round(tr.SellValue, 2)</td>
+                                        <td class="text-end @(tr.PnL >= 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(tr.PnL, 2)</td>
+                                        <td class="text-end @(tr.PnLAfterCharges >= 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(tr.PnLAfterCharges, 2)</td>
+                                        <td class="text-end">@Math.Round(tr.TotalCharges, 2)</td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                        </div></div></div></div>
+                    </div>
+                }
+
+                @foreach (var row in section.Yearly)
+                {
+                    var yearlyModalId = $"yearModal_{SafeId(section.Key)}_{row.SellDate.Year}";
+                    var yearStocks = AggregateStocks(section.Trades.Where(t => t.SellDate.Year == row.SellDate.Year));
+                    <div class="modal fade portfolio-modal realised-modal" id="@yearlyModalId" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">@row.SellDate.Year - Stock Breakdown</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body p-0"><div class="table-host">
+                            <table class="table table-hover mb-0 realised-modal-table">
+                                <thead><tr><th>Name</th><th class="text-end">Qty</th><th class="text-end">Buy Avg</th><th class="text-end">Sell Avg</th><th class="text-end">Dividend</th><th class="text-end">Total Cost</th><th class="text-end">Sell Value</th><th class="text-end">P&L</th><th class="text-end">P&L After Charges</th><th class="text-end">Charges</th></tr></thead>
+                                <tbody>
+                                @foreach (var s in yearStocks)
+                                {
+                                    <tr>
+                                        <td>@s.Name <small class="text-muted">(@s.Symbol)</small></td><td class="text-end">@Math.Round(s.Quantity, 4)</td><td class="text-end">@Math.Round(s.BuyPrice, 2)</td><td class="text-end">@Math.Round(s.SellPrice, 2)</td>
+                                        <td class="text-end">@Math.Round(s.Dividend, 2)</td><td class="text-end">@Math.Round(s.TotalCost, 2)</td><td class="text-end">@Math.Round(s.SellValue, 2)</td>
+                                        <td class="text-end @(s.PnL >= 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(s.PnL, 2)</td><td class="text-end @(s.PnLAfterCharges >= 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(s.PnLAfterCharges, 2)</td><td class="text-end">@Math.Round(s.TotalCharges, 2)</td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                        </div></div></div></div>
+                    </div>
+                }
+
+                @foreach (var row in section.Monthly)
+                {
+                    var monthlyModalId = $"monthModal_{SafeId(section.Key)}_{row.SellDate:yyyyMM}";
+                    var monthStocks = AggregateStocks(section.Trades.Where(t => t.SellDate.Year == row.SellDate.Year && t.SellDate.Month == row.SellDate.Month));
+                    <div class="modal fade portfolio-modal realised-modal" id="@monthlyModalId" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">@row.SellDate.ToString("MMM yyyy") - Stock Breakdown</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body p-0"><div class="table-host">
+                            <table class="table table-hover mb-0 realised-modal-table">
+                                <thead><tr><th>Name</th><th class="text-end">Qty</th><th class="text-end">Buy Avg</th><th class="text-end">Sell Avg</th><th class="text-end">Dividend</th><th class="text-end">Total Cost</th><th class="text-end">Sell Value</th><th class="text-end">P&L</th><th class="text-end">P&L After Charges</th><th class="text-end">Charges</th></tr></thead>
+                                <tbody>
+                                @foreach (var s in monthStocks)
+                                {
+                                    <tr>
+                                        <td>@s.Name <small class="text-muted">(@s.Symbol)</small></td><td class="text-end">@Math.Round(s.Quantity, 4)</td><td class="text-end">@Math.Round(s.BuyPrice, 2)</td><td class="text-end">@Math.Round(s.SellPrice, 2)</td>
+                                        <td class="text-end">@Math.Round(s.Dividend, 2)</td><td class="text-end">@Math.Round(s.TotalCost, 2)</td><td class="text-end">@Math.Round(s.SellValue, 2)</td>
+                                        <td class="text-end @(s.PnL >= 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(s.PnL, 2)</td><td class="text-end @(s.PnLAfterCharges >= 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(s.PnLAfterCharges, 2)</td><td class="text-end">@Math.Round(s.TotalCharges, 2)</td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                        </div></div></div></div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            $('table.realised-table').DataTable({
+                responsive: true,
+                autoWidth: false,
+                fixedHeader: true,
+                pageLength: 15,
+                order: []
+            });
+
+            $('.realised-modal').on('shown.bs.modal', function () {
+                var $table = $(this).find('table.realised-modal-table');
+                if ($table.length === 0 || $.fn.dataTable.isDataTable($table[0])) return;
+                $table.DataTable({
+                    responsive: true,
+                    autoWidth: false,
+                    pageLength: 10,
+                    order: []
+                });
+            });
+
+            $('button[data-bs-toggle="tab"]').on('shown.bs.tab', function () {
+                $($.fn.dataTable.tables(true)).DataTable().columns.adjust().responsive.recalc();
+            });
+        });
+    </script>
+}

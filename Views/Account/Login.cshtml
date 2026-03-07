@@ -1,0 +1,63 @@
+@model PortfolioNew.Models.LoginViewModel
+@{
+    ViewData["Title"] = "Login";
+}
+
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-12 col-sm-10 col-md-8 col-lg-5">
+            <div class="modern-card">
+                <div class="card-body p-4">
+                    <h4 class="mb-3">Sign In</h4>
+                    <p class="text-muted mb-4">Use your `User` sheet credentials.</p>
+
+                    <form asp-action="Login" asp-controller="Account" method="post">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" asp-for="ReturnUrl" />
+
+                        @if (!ViewData.ModelState.IsValid)
+                        {
+                            var modelErrors = ViewData.ModelState.Values
+                                .SelectMany(v => v.Errors)
+                                .Select(e => e.ErrorMessage)
+                                .Where(m => !string.IsNullOrWhiteSpace(m))
+                                .ToList();
+                            if (modelErrors.Count > 0)
+                            {
+                                <div class="alert alert-danger py-2 mb-3" role="alert">
+                                    @foreach (var err in modelErrors)
+                                    {
+                                        <div>@err</div>
+                                    }
+                                </div>
+                            }
+                        }
+
+                        <div class="mb-3">
+                            <label asp-for="Username" class="form-label"></label>
+                            <input asp-for="Username" class="form-control" autocomplete="username" />
+                            <span asp-validation-for="Username" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="Password" class="form-label"></label>
+                            <input asp-for="Password" class="form-control" autocomplete="current-password" />
+                            <span asp-validation-for="Password" class="text-danger"></span>
+                        </div>
+
+                        <div class="form-check mb-3">
+                            <input asp-for="RememberMe" class="form-check-input" />
+                            <label asp-for="RememberMe" class="form-check-label"></label>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100">Login</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

@@ -1,0 +1,848 @@
+@model PortfolioNew.Models.PortfolioResponseModel
+@{
+    ViewData["Title"] = "Portfolio Dashboard";
+    List<PortfolioNew.Models.BreakDownRow> consolidatedList = Model.AllLists["Consolidated"];
+    List<PortfolioNew.Models.BreakDownRow> tradeRows = Model.TradeRows ?? new List<PortfolioNew.Models.BreakDownRow>();
+    var summaryByTab = Model.AllLists.ToDictionary(
+        p => p.Key,
+        p => new
+        {
+            holdings = p.Value.Count,
+            totalCost = p.Value.Sum(x => x.TotalCost),
+            currentValue = p.Value.Sum(x => x.CurrentValue),
+            dividend = p.Value.Sum(x => x.Dividend),
+            pnl = p.Value.Sum(x => x.PnL),
+            change = p.Value.Sum(x => x.Change)
+        });
+    var summaryByTabJson = System.Text.Json.JsonSerializer.Serialize(summaryByTab);
+
+    double consolidatedTotalCost = consolidatedList.Sum(x => x.TotalCost);
+    double consolidatedCurrentValue = consolidatedList.Sum(x => x.CurrentValue);
+    double consolidatedDividend = consolidatedList.Sum(x => x.Dividend);
+    double consolidatedChange = consolidatedList.Sum(x => x.Change);
+    double consolidatedPnL = consolidatedList.Sum(x => x.PnL);
+    var topGainers = consolidatedList.OrderByDescending(x => x.Change).Take(5).ToList();
+    var topLosers = consolidatedList.OrderBy(x => x.Change).Take(5).ToList();
+
+    double RecoverQuantity(PortfolioNew.Models.BreakDownRow row)
+    {
+        if (row.PnL <= 0 || row.CurrentPrice <= 0 || row.Quantity <= 0)
+        {
+            return 0;
+        }
+
+        var recoverableCost = row.TotalCost - row.Dividend;
+        if (recoverableCost <= 0)
+        {
+            return 0;
+        }
+
+        var qty = recoverableCost / row.CurrentPrice;
+        if (double.IsNaN(qty) || double.IsInfinity(qty) || qty < 0)
+        {
+            return 0;
+        }
+
+        return Math.Min(qty, row.Quantity);
+    }
+
+    (string Text, string Style) GetAgeBadge(int daysSinceLastBuy)
+    {
+        if (daysSinceLastBuy < 15)
+        {
+            return ("Recent", "background-color:#00e676;color:#001b09;");
+        }
+        if (daysSinceLastBuy < 30)
+        {
+            return ("This Month", "background-color:#76ff03;color:#102000;");
+        }
+        if (daysSinceLastBuy < 90)
+        {
+            return ("Last 3 Months", "background-color:#ffd600;color:#1f1300;");
+        }
+        if (daysSinceLastBuy < 365)
+        {
+            return ("This Year", "background-color:#ff9100;color:#2a1200;");
+        }
+        return ("Over a Year", "background-color:#ff1744;color:#2b0008;");
+    }
+}
+
+<div class="container-fluid dashboard-container pt-4">
+    @if (TempData["CacheStatus"] != null)
+    {
+        <div class="alert alert-info py-2 mb-3" role="alert">
+            @TempData["CacheStatus"]
+        </div>
+    }
+    <div id="stickyStack" class="sticky-stack">
+    <!-- Summary Dashboard -->
+    <div class="summary-dashboard mb-3">
+        <div class="summary-item" data-summary-card="invested">
+            <div class="stat-card">
+                <div class="stat-label">Total Invested</div>
+                <div class="stat-value" id="summary-total-invested">₹@Math.Round(consolidatedTotalCost, 0).ToString("N0")</div>
+                <div class="stat-meta" id="summary-holdings">@consolidatedList.Count holdings</div>
+            </div>
+        </div>
+        <div class="summary-item" data-summary-card="current">
+            <div class="stat-card">
+                <div class="stat-label">Current Value</div>
+                <div class="stat-value" id="summary-current-value">₹@Math.Round(consolidatedCurrentValue, 0).ToString("N0")</div>
+                <div class="stat-meta">Portfolio value</div>
+            </div>
+        </div>
+        <div class="summary-item" data-summary-card="dividend">
+            <div class="stat-card">
+                <div class="stat-label">Dividends</div>
+                <div class="stat-value text-success" id="summary-dividends">₹@Math.Round(consolidatedDividend, 0).ToString("N0")</div>
+                <div class="stat-meta">Earned</div>
+            </div>
+        </div>
+        <div class="summary-item" data-summary-card="pnl">
+            <div class="stat-card @(consolidatedPnL > 0 ? "stat-card-success" : "stat-card-danger")" id="summary-pnl-card">
+                <div class="stat-label">Unrealised P&L</div>
+                <div class="stat-value" id="summary-pnl-value">₹@Math.Round(consolidatedPnL, 0).ToString("N0")</div>
+                <div class="stat-meta" id="summary-pnl-meta">@(consolidatedPnL > 0 ? "+" : "")@Math.Round((consolidatedPnL * 100 / (consolidatedTotalCost > 0 ? consolidatedTotalCost : 1)), 2)%</div>
+            </div>
+        </div>
+        <div class="summary-item" data-summary-card="change">
+            <div class="stat-card @(consolidatedChange > 0 ? "stat-card-success" : "stat-card-danger")" id="summary-change-card">
+                <div class="stat-label">Daily Change</div>
+                <div class="stat-value" id="summary-change-value">₹@Math.Round(consolidatedChange, 0).ToString("N0")</div>
+                <div class="stat-meta" id="summary-change-meta">@(consolidatedChange > 0 ? "+" : "")@Math.Round((((consolidatedCurrentValue - consolidatedChange) > 0 ? (100 * consolidatedChange / (consolidatedCurrentValue - consolidatedChange)) : 0)), 2)%</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="insight-toggle-wrap mb-2">
+        <button class="btn btn-sm btn-outline-secondary" id="toggleMovers" type="button" data-bs-toggle="collapse" data-bs-target="#moversCollapse" aria-expanded="true" aria-controls="moversCollapse">
+            Hide Top Movers
+        </button>
+    </div>
+    <div class="collapse show" id="moversCollapse">
+        <div class="insight-strip mb-3">
+            <div class="insight-col">
+                <div class="insight-title">Top Movers Up</div>
+                @foreach (var g in topGainers)
+                {
+                    <div class="insight-item metric-positive">@g.Symbol <span>@Math.Round(g.Change, 2)</span></div>
+                }
+            </div>
+            <div class="insight-col">
+                <div class="insight-title">Top Movers Down</div>
+                @foreach (var l in topLosers)
+                {
+                    <div class="insight-item metric-negative">@l.Symbol <span>@Math.Round(l.Change, 2)</span></div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="toolbar-strip mb-2">
+        <div class="toolbar-group" id="viewModeGroup">
+            <span class="toolbar-label">View</span>
+            <button class="btn btn-sm btn-outline-light active" data-view-mode="performance" type="button">Performance</button>
+            <button class="btn btn-sm btn-outline-light" data-view-mode="risk" type="button">Risk</button>
+            <button class="btn btn-sm btn-outline-light" data-view-mode="income" type="button">Income</button>
+        </div>
+        <div class="toolbar-group" id="quickFilterGroup">
+            <span class="toolbar-label">Quick Filters</span>
+            <button class="btn btn-sm btn-outline-info active" data-quick-filter="all" type="button">All</button>
+            <button class="btn btn-sm btn-outline-success" data-quick-filter="winners" type="button">Winners</button>
+            <button class="btn btn-sm btn-outline-danger" data-quick-filter="losers" type="button">Losers</button>
+            <button class="btn btn-sm btn-outline-warning" data-quick-filter="high-dividend" type="button">High Dividend</button>
+            <button class="btn btn-sm btn-outline-primary" data-quick-filter="recent" type="button">Recently Bought</button>
+        </div>
+        <div class="toolbar-group">
+            <form asp-action="ClearCache" asp-controller="Home" method="post" class="m-0">
+                @Html.AntiForgeryToken()
+                <button class="btn btn-sm btn-outline-secondary" type="submit">Clear Cache</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Portfolio Tabs -->
+    <ul class="nav nav-tabs" id="portfolioTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="consolidated-tab" data-bs-toggle="tab" data-bs-target="#consolidated" data-tab-key="Consolidated" type="button" role="tab">Consolidated (@consolidatedList.Count)</button>
+        </li>
+        @foreach (var portfolio in Model.AllLists.Where(p => p.Key != "Consolidated"))
+        {
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="tab-@portfolio.Key.Replace(" ", "")" data-bs-toggle="tab" data-bs-target="#@portfolio.Key.Replace(" ", "")" data-tab-key="@portfolio.Key" type="button" role="tab">@portfolio.Key (@portfolio.Value.Count)</button>
+            </li>
+        }
+    </ul>
+    </div>
+    <div class="tab-content" id="portfolioTabContent">
+        <!-- Consolidated tab pane -->
+        <div class="tab-pane fade show active" id="consolidated" role="tabpanel">
+            <div class="modern-card mb-4">
+                <div class="card-body p-0">
+                    <div class="table-host">
+                        <table class="table table-hover dt-responsive" id="consolidatedTable">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th class="text-end">Qty</th>
+                                    <th class="text-end">Buy Price</th>
+                                    <th class="text-end">Current Price</th>
+                                    <th class="text-end">Dividend <span data-bs-toggle="tooltip" title="Net dividend after reinvested amounts are adjusted.">i</span></th>
+                                    <th class="text-end">Total Cost</th>
+                                    <th class="text-end">Current Value</th>
+                                    <th class="text-end">Profit/Loss <span data-bs-toggle="tooltip" title="Unrealised gain/loss including dividend impact.">i</span></th>
+                                    <th class="text-end">%Profit/Loss <span data-bs-toggle="tooltip" title="Profit/Loss divided by total cost.">i</span></th>
+                                    <th class="text-end">Change <span data-bs-toggle="tooltip" title="Day change based on latest current value movement.">i</span></th>
+                                    <th class="text-end">%Change <span data-bs-toggle="tooltip" title="Day change as a percentage of prior day value.">i</span></th>
+                                    <th class="text-end">Realised PnL <span data-bs-toggle="tooltip" title="Realised PnL sourced from inactive trades sheet.">i</span></th>
+                                    <th>Investment Summary <span data-bs-toggle="tooltip" title="Recent investment flow: month-to-date, last 90 days, year-to-date.">i</span></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in consolidatedList)
+                                {
+                                    var modalId = "symbolModal_" + new string((item.Symbol ?? "").Where(char.IsLetterOrDigit).ToArray());
+                                    var symbolTrades = tradeRows
+                                        .Where(t => string.Equals(t.Symbol, item.Symbol, StringComparison.OrdinalIgnoreCase))
+                                        .ToList();
+                                    DateTime? lastBuy = symbolTrades
+                                        .Select(t => DateTime.TryParse(t.Date, out var d) ? d : DateTime.MinValue)
+                                        .Where(d => d != DateTime.MinValue)
+                                        .OrderByDescending(d => d)
+                                        .FirstOrDefault();
+                                    var daysSinceLastBuy = lastBuy.HasValue ? (DateTime.Now.Date - lastBuy.Value.Date).Days : (int?)null;
+                                    var now = DateTime.Now;
+                                    var monthTotal = symbolTrades
+                                        .Where(t => DateTime.TryParse(t.Date, out var d) && d.Month == now.Month && d.Year == now.Year)
+                                        .Sum(t => t.TotalCost);
+                                    var last90Total = symbolTrades
+                                        .Where(t => DateTime.TryParse(t.Date, out var d) && d >= now.AddDays(-90))
+                                        .Sum(t => t.TotalCost);
+                                    var yearTotal = symbolTrades
+                                        .Where(t => DateTime.TryParse(t.Date, out var d) && d.Year == now.Year)
+                                        .Sum(t => t.TotalCost);
+                                    var pnlPct = item.TotalCost > 0 ? (item.PnL * 100 / item.TotalCost) : 0;
+                                    var dividendYieldPct = item.TotalCost > 0 ? (item.Dividend * 100 / item.TotalCost) : 0;
+                                    var weightValuePct = consolidatedCurrentValue > 0 ? (item.CurrentValue * 100 / consolidatedCurrentValue) : 0;
+                                    var weightPnlPct = consolidatedPnL != 0 ? (item.PnL * 100 / consolidatedPnL) : 0;
+                                    var weightChangePct = consolidatedChange != 0 ? (item.Change * 100 / consolidatedChange) : 0;
+                                    <tr data-pnl="@item.PnL" data-dividend-yield="@dividendYieldPct" data-days-last-buy="@(daysSinceLastBuy ?? 99999)">
+                                        <td>
+                                            <div class="holding-name">
+                                                @item.Name
+                                            </div>
+                                            <small class="text-muted">@item.Symbol</small>
+                                            <div class="sparkline-wrap"><div class="sparkline @(item.PnL >= 0 ? "sparkline-positive" : "sparkline-negative")" style="width:@Math.Min(Math.Abs(pnlPct), 100)%"></div></div>
+                                            @if (daysSinceLastBuy.HasValue)
+                                            {
+                                                var ageBadge = GetAgeBadge(daysSinceLastBuy.Value);
+                                                <div class="mt-1">
+                                                    <span class="badge me-1" style="@ageBadge.Style">Last Buy @lastBuy?.ToString("dd MMM yyyy")</span>
+                                                    <span class="badge" style="@ageBadge.Style">@daysSinceLastBuy days (@ageBadge.Text)</span>
+                                                </div>
+                                            }
+                                        </td>
+                                        <td class="text-end">
+                                            <a href="#" class="text-decoration-none" data-bs-toggle="modal" data-bs-target="#@modalId">@Math.Round(item.Quantity, 4)</a>
+                                        </td>
+                                        <td class="text-end">@Math.Round(item.BuyPrice, 2)</td>
+                                        <td class="text-end">@Math.Round(item.CurrentPrice, 2)</td>
+                                        <td class="text-end @(item.Dividend > item.CurrentPrice ? "dividend-highlight" : "")">@Math.Round(item.Dividend, 2)</td>
+                                        <td class="text-end">@Math.Round(item.TotalCost, 2)</td>
+                                        <td class="text-end">@Math.Round(item.CurrentValue, 2)</td>
+                                        <td class="text-end @(item.PnL > 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(item.PnL, 2)</td>
+                                        <td class="text-end @(item.PnL > 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(pnlPct, 2)%</td>
+                                        <td class="text-end @(item.Change > 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(item.Change, 2)</td>
+                                        <td class="text-end @(item.Change > 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round((item.CurrentValue - item.Change) > 0 ? (100 * item.Change / (item.CurrentValue - item.Change)) : 0, 2)%</td>
+                                        <td class="text-end @(item.RealisedPnL > 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(item.RealisedPnL, 2)</td>
+                                        <td>
+                                            <div class="investment-summary">
+                                                MTD @Math.Round(monthTotal, 0).ToString("N0") | 90D @Math.Round(last90Total, 0).ToString("N0") | YTD @Math.Round(yearTotal, 0).ToString("N0")
+                                            </div>
+                                            <div class="weight-summary">
+                                                Wt(Value) @Math.Round(weightValuePct, 2)% | Wt(PnL) @Math.Round(weightPnlPct, 2)% | Wt(Change) @Math.Round(weightChangePct, 2)%
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @foreach (var item in consolidatedList)
+        {
+            var modalId = "symbolModal_" + new string((item.Symbol ?? "").Where(char.IsLetterOrDigit).ToArray());
+            var portfolioBreakdown = Model.AllLists
+                .Where(p => p.Key != "Consolidated")
+                .SelectMany(p => p.Value.Select(v => new { PortfolioName = p.Key, Row = v }))
+                .Where(x => string.Equals(x.Row.Symbol, item.Symbol, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            <div class="modal fade portfolio-modal" id="@modalId" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">@item.Name (@item.Symbol) - Portfolio Breakdown</h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body p-0">
+                            <div class="table-host">
+                                <table class="table table-hover mb-0 modal-breakdown-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Portfolio</th>
+                                            <th>Account</th>
+                                            <th class="text-end">Qty</th>
+                                            <th class="text-end">Buy Price</th>
+                                            <th class="text-end">Current Price</th>
+                                            <th class="text-end">Dividend</th>
+                                            <th class="text-end">Total Cost</th>
+                                            <th class="text-end">Current Value</th>
+                                            <th class="text-end">Profit/Loss <span data-bs-toggle="tooltip" title="Unrealised gain/loss including dividend impact.">i</span></th>
+                                            <th class="text-end">%Profit/Loss <span data-bs-toggle="tooltip" title="Profit/Loss divided by total cost.">i</span></th>
+                                            <th class="text-end">Change <span data-bs-toggle="tooltip" title="Day change based on latest current value movement.">i</span></th>
+                                            <th class="text-end">%Change <span data-bs-toggle="tooltip" title="Day change as a percentage of prior day value.">i</span></th>
+                                            <th class="text-end">Realised PnL <span data-bs-toggle="tooltip" title="Realised PnL sourced from inactive trades sheet.">i</span></th>
+                                            <th class="text-end">Recover Qty <span data-bs-toggle="tooltip" title="Units to sell at current price to recover invested cost net of dividend.">i</span></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var detail in portfolioBreakdown)
+                                        {
+                                            var row = detail.Row;
+                                            var recoverQty = RecoverQuantity(row);
+                                            <tr>
+                                                <td>@detail.PortfolioName</td>
+                                                <td>@row.Account</td>
+                                                <td class="text-end">@Math.Round(row.Quantity, 4)</td>
+                                                <td class="text-end">@Math.Round(row.BuyPrice, 2)</td>
+                                                <td class="text-end">@Math.Round(row.CurrentPrice, 2)</td>
+                                                <td class="text-end @(row.Dividend > row.CurrentPrice ? "dividend-highlight" : "")">@Math.Round(row.Dividend, 2)</td>
+                                                <td class="text-end">@Math.Round(row.TotalCost, 2)</td>
+                                                <td class="text-end">@Math.Round(row.CurrentValue, 2)</td>
+                                                <td class="text-end @(row.PnL > 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(row.PnL, 2)</td>
+                                                <td class="text-end @(row.PnL > 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round((row.PnL * 100 / (row.TotalCost > 0 ? row.TotalCost : 1)), 2)%</td>
+                                                <td class="text-end @(row.Change > 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(row.Change, 2)</td>
+                                                <td class="text-end @(row.Change > 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round((row.CurrentValue - row.Change) > 0 ? (100 * row.Change / (row.CurrentValue - row.Change)) : 0, 2)%</td>
+                                                <td class="text-end @(row.RealisedPnL > 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(row.RealisedPnL, 2)</td>
+                                                <td class="text-end fw-bold">@Math.Round(recoverQty, 4)</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+    <!-- Individual Portfolio Tabs -->
+    @foreach (var portfolio in Model.AllLists.Where(p => p.Key != "Consolidated"))
+    {
+        <div class="tab-pane fade" id="@portfolio.Key.Replace(" ", "")" role="tabpanel">
+            <div class="modern-card mb-4">
+                <div class="card-body p-0">
+                    <div class="table-host">
+                        <table class="table table-hover dt-responsive portfolio-table" id="table-@portfolio.Key.Replace(" ", "")">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th class="text-end">Qty</th>
+                                    <th class="text-end">Buy Price</th>
+                                    <th class="text-end">Current Price</th>
+                                    <th class="text-end">Dividend <span data-bs-toggle="tooltip" title="Net dividend after reinvested amounts are adjusted.">i</span></th>
+                                    <th class="text-end">Total Cost</th>
+                                    <th class="text-end">Current Value</th>
+                                    <th class="text-end">Profit/Loss <span data-bs-toggle="tooltip" title="Unrealised gain/loss including dividend impact.">i</span></th>
+                                    <th class="text-end">%Profit/Loss <span data-bs-toggle="tooltip" title="Profit/Loss divided by total cost.">i</span></th>
+                                    <th>Investment Summary <span data-bs-toggle="tooltip" title="Recent investment flow: month-to-date, last 90 days, year-to-date.">i</span></th>
+                                    <th class="text-end">Recover Qty <span data-bs-toggle="tooltip" title="Units to sell at current price to recover invested cost net of dividend.">i</span></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in portfolio.Value)
+                                {
+                                    var modalId = "tradeModal_" + new string((portfolio.Key + "_" + item.Account + "_" + item.Symbol).Where(char.IsLetterOrDigit).ToArray());
+                                    var recoverQty = RecoverQuantity(item);
+                                    var tradeSummaryRows = tradeRows
+                                        .Where(t => string.Equals(t.Portfolio, portfolio.Key, StringComparison.OrdinalIgnoreCase)
+                                            && string.Equals(t.Account, item.Account, StringComparison.OrdinalIgnoreCase)
+                                            && string.Equals(t.Symbol, item.Symbol, StringComparison.OrdinalIgnoreCase))
+                                        .ToList();
+                                    var now = DateTime.Now;
+                                    var monthTotal = tradeSummaryRows
+                                        .Where(t => DateTime.TryParse(t.Date, out var d) && d.Month == now.Month && d.Year == now.Year)
+                                        .Sum(t => t.TotalCost);
+                                    var last90Total = tradeSummaryRows
+                                        .Where(t => DateTime.TryParse(t.Date, out var d) && d >= now.AddDays(-90))
+                                        .Sum(t => t.TotalCost);
+                                    var yearTotal = tradeSummaryRows
+                                        .Where(t => DateTime.TryParse(t.Date, out var d) && d.Year == now.Year)
+                                        .Sum(t => t.TotalCost);
+                                    DateTime? lastBuy = tradeSummaryRows
+                                        .Select(t => DateTime.TryParse(t.Date, out var d) ? d : DateTime.MinValue)
+                                        .Where(d => d != DateTime.MinValue)
+                                        .OrderByDescending(d => d)
+                                        .FirstOrDefault();
+                                    var daysSinceLastBuy = lastBuy.HasValue ? (DateTime.Now.Date - lastBuy.Value.Date).Days : (int?)null;
+                                    var pnlPct = item.TotalCost > 0 ? (item.PnL * 100 / item.TotalCost) : 0;
+                                    var dividendYieldPct = item.TotalCost > 0 ? (item.Dividend * 100 / item.TotalCost) : 0;
+                                    <tr data-pnl="@item.PnL" data-dividend-yield="@dividendYieldPct" data-days-last-buy="@(daysSinceLastBuy ?? 99999)">
+                                        <td>
+                                            <div class="holding-name">@item.Name</div>
+                                            <small class="text-muted">@item.Symbol</small>
+                                            <div class="sparkline-wrap"><div class="sparkline @(item.PnL >= 0 ? "sparkline-positive" : "sparkline-negative")" style="width:@Math.Min(Math.Abs(pnlPct), 100)%"></div></div>
+                                            @if (daysSinceLastBuy.HasValue)
+                                            {
+                                                var ageBadge = GetAgeBadge(daysSinceLastBuy.Value);
+                                                <div class="mt-1">
+                                                    <span class="badge me-1" style="@ageBadge.Style">Last Buy @lastBuy?.ToString("dd MMM yyyy")</span>
+                                                    <span class="badge" style="@ageBadge.Style">@daysSinceLastBuy days (@ageBadge.Text)</span>
+                                                </div>
+                                            }
+                                        </td>
+                                        <td class="text-end">
+                                            <a href="#" class="text-decoration-none" data-bs-toggle="modal" data-bs-target="#@modalId">@Math.Round(item.Quantity, 4)</a>
+                                        </td>
+                                        <td class="text-end">@Math.Round(item.BuyPrice, 2)</td>
+                                        <td class="text-end">@Math.Round(item.CurrentPrice, 2)</td>
+                                        <td class="text-end @(item.Dividend > item.CurrentPrice ? "dividend-highlight" : "")">@Math.Round(item.Dividend, 2)</td>
+                                        <td class="text-end">@Math.Round(item.TotalCost, 2)</td>
+                                        <td class="text-end">@Math.Round(item.CurrentValue, 2)</td>
+                                        <td class="text-end @(item.PnL > 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(item.PnL, 2)</td>
+                                        <td class="text-end @(item.PnL > 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(pnlPct, 2)%</td>
+                                        <td>
+                                            <div class="investment-summary">
+                                                MTD @Math.Round(monthTotal, 0).ToString("N0") | 90D @Math.Round(last90Total, 0).ToString("N0") | YTD @Math.Round(yearTotal, 0).ToString("N0")
+                                            </div>
+                                        </td>
+                                        <td class="text-end fw-bold">@Math.Round(recoverQty, 4)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @foreach (var item in portfolio.Value)
+        {
+            var modalId = "tradeModal_" + new string((portfolio.Key + "_" + item.Account + "_" + item.Symbol).Where(char.IsLetterOrDigit).ToArray());
+            var tradeBreakdown = tradeRows
+                .Where(t => string.Equals(t.Portfolio, portfolio.Key, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(t.Account, item.Account, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(t.Symbol, item.Symbol, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(t => DateTime.TryParse(t.Date, out var d) ? d : DateTime.MinValue)
+                .ToList();
+
+            <div class="modal fade portfolio-modal" id="@modalId" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">@item.Name (@item.Symbol) - Trade Breakdown</h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body p-0">
+                            <div class="table-host">
+                                <table class="table table-hover mb-0 modal-breakdown-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="text-end">Qty</th>
+                                            <th>Date</th>
+                                            <th class="text-end">Buy Price</th>
+                                            <th class="text-end">Dividend</th>
+                                            <th class="text-end">Total Cost</th>
+                                            <th class="text-end">Current Value</th>
+                                            <th class="text-end">Profit/Loss <span data-bs-toggle="tooltip" title="Unrealised gain/loss including dividend impact.">i</span></th>
+                                            <th class="text-end">%Profit/Loss <span data-bs-toggle="tooltip" title="Profit/Loss divided by total cost.">i</span></th>
+                                            <th class="text-end">CAGR</th>
+                                            <th>Ageing</th>
+                                            <th>Tag</th>
+                                            <th>Comments</th>
+                                            <th class="text-end">Recover Qty <span data-bs-toggle="tooltip" title="Units to sell at current price to recover invested cost net of dividend.">i</span></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var trade in tradeBreakdown)
+                                        {
+                                            double tradePnl = trade.CurrentValue - trade.TotalCost + trade.Dividend;
+                                            double tradePnlPct = trade.TotalCost > 0 ? (tradePnl * 100 / trade.TotalCost) : 0;
+                                            double tradeRecoverQty = RecoverQuantity(trade);
+                                            string cagrText = "N/A";
+                                            if (DateTime.TryParse(trade.Date, out var tradeDate))
+                                            {
+                                                var yearsHeld = (DateTime.Now - tradeDate).TotalDays / 365.0;
+                                                if (yearsHeld >= 1 && trade.TotalCost > 0)
+                                                {
+                                                    var growth = (trade.CurrentValue + trade.Dividend) / trade.TotalCost;
+                                                    var cagr = Math.Pow(growth, 1 / yearsHeld) - 1;
+                                                    cagrText = $"{Math.Round(cagr * 100, 2)}%";
+                                                }
+                                            }
+                                            <tr>
+                                                <td class="text-end">@Math.Round(trade.Quantity, 4)</td>
+                                                <td>@trade.Date</td>
+                                                <td class="text-end">@Math.Round(trade.BuyPrice, 2)</td>
+                                                <td class="text-end @(trade.Dividend > trade.CurrentPrice ? "dividend-highlight" : "")">@Math.Round(trade.Dividend, 2)</td>
+                                                <td class="text-end">@Math.Round(trade.TotalCost, 2)</td>
+                                                <td class="text-end">@Math.Round(trade.CurrentValue, 2)</td>
+                                                <td class="text-end @(tradePnl > 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(tradePnl, 2)</td>
+                                                <td class="text-end @(tradePnl > 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(tradePnlPct, 2)%</td>
+                                                <td class="text-end">@cagrText</td>
+                                                <td>@trade.Ageing</td>
+                                                <td>@trade.Tag</td>
+                                                <td>@trade.Comments</td>
+                                                <td class="text-end fw-bold">@Math.Round(tradeRecoverQty, 4)</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@section Scripts {
+    <script>
+        // Initialize all DataTables
+        $(document).ready(function() {
+            var dataTables = [];
+            var summaryByTab = @Html.Raw(summaryByTabJson);
+            var activeQuickFilter = "all";
+            var activeViewMode = "performance";
+
+            function getActiveTableId() {
+                var activePane = document.querySelector('#portfolioTabContent .tab-pane.active.show') || document.querySelector('#portfolioTabContent .tab-pane.active');
+                if (!activePane) {
+                    return "consolidatedTable";
+                }
+                var table = activePane.querySelector('table.dataTable, table.table');
+                return table ? table.id : "consolidatedTable";
+            }
+
+            function rowMatchesQuickFilter(rowNode) {
+                if (!rowNode || activeQuickFilter === "all") {
+                    return true;
+                }
+
+                var pnl = Number(rowNode.getAttribute("data-pnl") || 0);
+                var dividendYield = Number(rowNode.getAttribute("data-dividend-yield") || 0);
+                var daysLastBuy = Number(rowNode.getAttribute("data-days-last-buy") || 99999);
+
+                if (activeQuickFilter === "winners") {
+                    return pnl > 0;
+                }
+                if (activeQuickFilter === "losers") {
+                    return pnl < 0;
+                }
+                if (activeQuickFilter === "high-dividend") {
+                    return dividendYield >= 3;
+                }
+                if (activeQuickFilter === "recent") {
+                    return daysLastBuy <= 30;
+                }
+                return true;
+            }
+
+            function applySummaryCardOrder(mode) {
+                var orderMap = {
+                    performance: ["invested", "current", "pnl", "change", "dividend"],
+                    risk: ["invested", "pnl", "change", "current", "dividend"],
+                    income: ["dividend", "current", "invested", "pnl", "change"]
+                };
+                var order = orderMap[mode] || orderMap.performance;
+                order.forEach(function(card, index) {
+                    $('[data-summary-card="' + card + '"]').css('order', index + 1);
+                });
+            }
+
+            function applyViewModeToTable(table, mode) {
+                if (!table) {
+                    return;
+                }
+                var tableId = table.table().node().id;
+                var isConsolidated = tableId === "consolidatedTable";
+
+                if (isConsolidated) {
+                    var showChangeCols = mode === "performance";
+                    table.column(9).visible(showChangeCols, false);
+                    table.column(10).visible(showChangeCols, false);
+                    table.column(11).visible(showChangeCols, false);
+                }
+
+                if (mode === "income") {
+                    table.order([[4, 'desc']]);
+                } else if (mode === "risk") {
+                    table.order([[1, 'desc']]);
+                } else {
+                    table.order([[7, 'desc']]);
+                }
+
+                table.columns.adjust().draw(false);
+            }
+
+            function applyViewMode(mode) {
+                activeViewMode = mode;
+                dataTables.forEach(function(table) {
+                    var tableId = table.table().node().id;
+                    if (tableId === "consolidatedTable" || tableId.indexOf("table-") === 0) {
+                        applyViewModeToTable(table, mode);
+                    }
+                });
+                applySummaryCardOrder(mode);
+                updateStickyOffsets();
+            }
+
+            $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
+                var currentTableId = settings && settings.nTable ? settings.nTable.id : "";
+                if (!currentTableId) {
+                    return true;
+                }
+
+                var activeTableId = getActiveTableId();
+                if (currentTableId !== activeTableId) {
+                    return true;
+                }
+
+                var rowNode = settings.aoData && settings.aoData[dataIndex] ? settings.aoData[dataIndex].nTr : null;
+                return rowMatchesQuickFilter(rowNode);
+            });
+
+            function getMetricClass(title, rawValue) {
+                var metricTitles = ['Profit/Loss', '%Profit/Loss', 'Change', '%Change', 'Realised PnL'];
+                if (metricTitles.indexOf(title) === -1) {
+                    return '';
+                }
+
+                var numericText = String(rawValue || '')
+                    .replace(/<[^>]*>/g, '')
+                    .replace(/,/g, '')
+                    .replace('%', '')
+                    .trim();
+                var num = parseFloat(numericText);
+                if (isNaN(num)) {
+                    return '';
+                }
+
+                return num > 0 ? 'metric-positive' : 'metric-negative';
+            }
+
+            function responsiveTabRenderer(api, rowIdx, columns) {
+                var tabs = columns
+                    .filter(function(col) { return col.hidden; })
+                    .map(function(col) {
+                        var metricClass = getMetricClass(col.title, col.data);
+                        return (
+                            '<div class="dtr-tab ' + metricClass + '">' +
+                                '<span class="dtr-tab-label">' + col.title + '</span>' +
+                                '<span class="dtr-tab-value">' + col.data + '</span>' +
+                            '</div>'
+                        );
+                    })
+                    .join('');
+
+                return tabs ? $('<div class="dtr-tabs"/>').append(tabs) : false;
+            }
+
+            
+            function formatInr(value) {
+                var n = Number(value || 0);
+                return "\u20B9" + Math.round(n).toLocaleString("en-IN");
+            }
+
+            function formatPct(value) {
+                var n = Number(value || 0);
+                var sign = n > 0 ? "+" : "";
+                return sign + n.toFixed(2) + "%";
+            }
+
+            function updateSummaryForTab(tabKey) {
+                var s = summaryByTab[tabKey];
+                if (!s) {
+                    return;
+                }
+
+                var pnlPct = s.totalCost > 0 ? ((s.pnl * 100) / s.totalCost) : 0;
+                var changePct = (s.currentValue - s.change) > 0 ? ((100 * s.change) / (s.currentValue - s.change)) : 0;
+
+                $("#summary-total-invested").text(formatInr(s.totalCost));
+                $("#summary-current-value").text(formatInr(s.currentValue));
+                $("#summary-dividends").text(formatInr(s.dividend));
+                $("#summary-pnl-value").text(formatInr(s.pnl));
+                $("#summary-pnl-meta").text(formatPct(pnlPct));
+                $("#summary-change-value").text(formatInr(s.change));
+                $("#summary-change-meta").text(formatPct(changePct));
+                $("#summary-holdings").text((s.holdings || 0) + " holdings");
+
+                $("#summary-pnl-card")
+                    .toggleClass("stat-card-success", s.pnl > 0)
+                    .toggleClass("stat-card-danger", s.pnl <= 0);
+                $("#summary-change-card")
+                    .toggleClass("stat-card-success", s.change > 0)
+                    .toggleClass("stat-card-danger", s.change <= 0);
+            }
+
+            function getActiveTabKey() {
+                var $activeTab = $('#portfolioTabs .nav-link.active');
+                return $activeTab.data('tab-key') || 'Consolidated';
+            }
+            function updateStickyOffsets() {
+                var navbar = document.querySelector('.navbar');
+                var navbarHeight = navbar ? Math.ceil(navbar.getBoundingClientRect().height) : 0;
+                var stickyStack = document.getElementById('stickyStack');
+                var stackHeight = stickyStack ? Math.ceil(stickyStack.getBoundingClientRect().height) : 0;
+                var desktop = window.matchMedia('(min-width: 992px)').matches;
+                var headerOffset = desktop ? (navbarHeight + stackHeight) : navbarHeight;
+
+                document.documentElement.style.setProperty('--navbar-offset', navbarHeight + 'px');
+                document.documentElement.style.setProperty('--sticky-stack-height', stackHeight + 'px');
+
+                dataTables.forEach(function(table) {
+                    if (table.fixedHeader) {
+                        table.fixedHeader.headerOffset(headerOffset);
+                        table.fixedHeader.adjust();
+                    }
+                });
+            }
+
+            var consolidatedTable = $('#consolidatedTable').DataTable({
+                responsive: {
+                    details: {
+                        renderer: responsiveTabRenderer
+                    }
+                },
+                autoWidth: false,
+                fixedHeader: true,
+                stateSave: true,
+                stateDuration: -1,
+                pageLength: 15,
+                order: [[7, 'desc']], // Sort by P&L descending
+                columnDefs: [
+                    { targets: [1,2,3,4,5,6,7,8,9,10,11], className: "text-end" }
+                ]
+            });
+            dataTables.push(consolidatedTable);
+
+            // Initialize tables for each portfolio
+            $('table.portfolio-table').each(function() {
+                var table = $(this).DataTable({
+                    responsive: {
+                        details: {
+                            renderer: responsiveTabRenderer
+                        }
+                    },
+                    autoWidth: false,
+                    fixedHeader: true,
+                    stateSave: true,
+                    stateDuration: -1,
+                    pageLength: 15,
+                    order: [[7, 'desc']], // Sort by P&L descending
+                    columnDefs: [
+                        { targets: [1,2,3,4,5,6,7,8,10], className: "text-end" }
+                    ]
+                });
+                dataTables.push(table);
+            });
+
+            updateStickyOffsets();
+            updateSummaryForTab("Consolidated");
+            applyViewMode(activeViewMode);
+            $(window).on('resize', updateStickyOffsets);
+            $('button[data-bs-toggle="tab"]').on('shown.bs.tab', function () {
+                var tabKey = $(this).data('tab-key');
+                if (tabKey) {
+                    updateSummaryForTab(tabKey);
+                }
+                dataTables.forEach(function(table) {
+                    table.columns.adjust().responsive.recalc();
+                    if (table.fixedHeader) {
+                        table.fixedHeader.adjust();
+                    }
+                });
+                applyViewMode(activeViewMode);
+                updateStickyOffsets();
+            });
+
+            $('#portfolioTabs .nav-link').on('mouseenter', function () {
+                var tabKey = $(this).data('tab-key');
+                if (tabKey) {
+                    updateSummaryForTab(tabKey);
+                }
+            });
+
+            $('#portfolioTabs .nav-link').on('mouseleave', function () {
+                updateSummaryForTab(getActiveTabKey());
+            });
+
+            $('#viewModeGroup [data-view-mode]').on('click', function () {
+                $('#viewModeGroup [data-view-mode]').removeClass('active');
+                $(this).addClass('active');
+                applyViewMode($(this).data('view-mode'));
+            });
+
+            $('#quickFilterGroup [data-quick-filter]').on('click', function () {
+                $('#quickFilterGroup [data-quick-filter]').removeClass('active');
+                $(this).addClass('active');
+                activeQuickFilter = $(this).data('quick-filter');
+                dataTables.forEach(function(table) {
+                    table.draw();
+                });
+            });
+
+            var moversStateKey = 'portfolio_movers_collapsed';
+            if (sessionStorage.getItem(moversStateKey) === '1') {
+                $('#moversCollapse').removeClass('show');
+                $('#toggleMovers').text('Show Top Movers').attr('aria-expanded', 'false');
+            }
+            $('#moversCollapse').on('shown.bs.collapse', function () {
+                sessionStorage.setItem(moversStateKey, '0');
+                $('#toggleMovers').text('Hide Top Movers').attr('aria-expanded', 'true');
+            });
+            $('#moversCollapse').on('hidden.bs.collapse', function () {
+                sessionStorage.setItem(moversStateKey, '1');
+                $('#toggleMovers').text('Show Top Movers').attr('aria-expanded', 'false');
+            });
+
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            tooltipTriggerList.forEach(function (tooltipTriggerEl) {
+                new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+
+            // Initialize modal breakdown tables lazily when modal is shown.
+            $('.portfolio-modal').on('shown.bs.modal', function () {
+                var $table = $(this).find('table.modal-breakdown-table');
+                if ($table.length === 0 || $.fn.dataTable.isDataTable($table[0])) {
+                    return;
+                }
+
+                $table.DataTable({
+                    responsive: {
+                        details: {
+                            renderer: responsiveTabRenderer
+                        }
+                    },
+                    autoWidth: false,
+                    stateSave: true,
+                    stateDuration: -1,
+                    pageLength: 10,
+                    order: [],
+                    columnDefs: []
+                });
+            });
+        });
+    </script>
+}
+
+
+
+
