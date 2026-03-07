@@ -1,0 +1,205 @@
+@model PortfolioNew.Models.InvestmentDiaryResponseModel
+@{
+    ViewData["Title"] = "Investment Diary";
+}
+
+<div class="container-fluid dashboard-container pt-4">
+    <div class="d-flex justify-content-end align-items-center gap-2 mb-3">
+        <form method="get" asp-controller="InvestmentDiary" asp-action="Index" class="d-flex align-items-center gap-2 m-0">
+            <label for="bonusSplitAdjusted" class="mb-0">Bonus/Split Adjusted</label>
+            <input type="hidden" id="bonusSplitAdjustedValue" name="bonusSplitAdjusted" value="@(Model.BonusSplitAdjusted ? "true" : "false")" />
+            <div class="form-check form-switch m-0">
+                <input class="form-check-input" type="checkbox" id="bonusSplitAdjusted" @(Model.BonusSplitAdjusted ? "checked" : "") />
+            </div>
+        </form>
+    </div>
+
+    <div class="summary-dashboard mb-3">
+        <div class="summary-item"><div class="stat-card"><div class="stat-label">Total Cost</div><div class="stat-value">₹@Math.Round(Model.TotalCost, 0).ToString("N0")</div></div></div>
+        <div class="summary-item"><div class="stat-card"><div class="stat-label">Current Value</div><div class="stat-value">₹@Math.Round(Model.CurrentValue, 0).ToString("N0")</div></div></div>
+        <div class="summary-item"><div class="stat-card @(Model.TotalPnL > 0 ? "stat-card-success" : "stat-card-danger")"><div class="stat-label">Total P&L</div><div class="stat-value">₹@Math.Round(Model.TotalPnL, 0).ToString("N0")</div></div></div>
+        <div class="summary-item"><div class="stat-card"><div class="stat-label">Dividend</div><div class="stat-value text-success">₹@Math.Round(Model.Dividend, 0).ToString("N0")</div></div></div>
+        <div class="summary-item"><div class="stat-card"><div class="stat-label">Dividend Reinvestment</div><div class="stat-value">₹@Math.Round(Model.DividendReinvestment, 0).ToString("N0")</div></div></div>
+    </div>
+
+    <ul class="nav nav-tabs mb-2" role="tablist">
+        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#yearly" type="button">Yearly</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#monthly" type="button">Monthly</button></li>
+    </ul>
+
+    <div class="tab-content">
+        <div class="tab-pane fade show active" id="yearly">
+            <div class="modern-card mb-4">
+                <div class="card-body p-0">
+                    <div class="table-host">
+                        <table class="table table-hover diary-table" id="yearlyTable">
+                            <thead>
+                                <tr>
+                                    <th>Year</th>
+                                    <th class="text-end">Total Cost</th>
+                                    <th class="text-end">Current Value</th>
+                                    <th class="text-end">P&L</th>
+                                    <th class="text-end">%P&L</th>
+                                    <th class="text-end">Dividend</th>
+                                    <th class="text-end">Dividend Reinvestment</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in Model.Yearly)
+                                {
+                                    var modalId = $"yearModal_{row.PeriodDate.Year}";
+                                    <tr>
+                                        <td><a href="#" class="text-decoration-none" data-bs-toggle="modal" data-bs-target="#@modalId">@row.PeriodDate.Year</a></td>
+                                        <td class="text-end">@Math.Round(row.TotalCost, 2)</td>
+                                        <td class="text-end">@Math.Round(row.CurrentValue, 2)</td>
+                                        <td class="text-end @(row.ProfitLoss >= 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(row.ProfitLoss, 2)</td>
+                                        <td class="text-end @(row.ProfitLoss >= 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(row.ProfitLossPercent, 2)%</td>
+                                        <td class="text-end">@Math.Round(row.Dividend, 2)</td>
+                                        <td class="text-end">@Math.Round(row.DividendReinvestment, 2)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="monthly">
+            <div class="modern-card mb-4">
+                <div class="card-body p-0">
+                    <div class="table-host">
+                        <table class="table table-hover diary-table" id="monthlyTable">
+                            <thead>
+                                <tr>
+                                    <th>Month</th>
+                                    <th class="text-end">Total Cost</th>
+                                    <th class="text-end">Current Value</th>
+                                    <th class="text-end">P&L</th>
+                                    <th class="text-end">%P&L</th>
+                                    <th class="text-end">Dividend</th>
+                                    <th class="text-end">Dividend Reinvestment</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in Model.Monthly)
+                                {
+                                    var modalId = $"monthModal_{row.PeriodDate:yyyyMM}";
+                                    <tr>
+                                        <td><a href="#" class="text-decoration-none" data-bs-toggle="modal" data-bs-target="#@modalId">@row.PeriodLabel</a></td>
+                                        <td class="text-end">@Math.Round(row.TotalCost, 2)</td>
+                                        <td class="text-end">@Math.Round(row.CurrentValue, 2)</td>
+                                        <td class="text-end @(row.ProfitLoss >= 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(row.ProfitLoss, 2)</td>
+                                        <td class="text-end @(row.ProfitLoss >= 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(row.ProfitLossPercent, 2)%</td>
+                                        <td class="text-end">@Math.Round(row.Dividend, 2)</td>
+                                        <td class="text-end">@Math.Round(row.DividendReinvestment, 2)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @foreach (var row in Model.Yearly)
+    {
+        var modalId = $"yearModal_{row.PeriodDate.Year}";
+        <div class="modal fade portfolio-modal" id="@modalId" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">@row.PeriodDate.Year - Transaction Breakdown</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body p-0">
+                        <div class="table-host">
+                            <table class="table table-hover mb-0 diary-modal-table">
+                                <thead>
+                                    <tr>
+                                        <th>Account</th><th>Name</th><th>Date</th><th class="text-end">Qty</th><th class="text-end">Buy Price</th><th class="text-end">Total Cost</th><th class="text-end">Current Value</th><th class="text-end">P&L</th><th class="text-end">Dividend</th><th class="text-end">Dividend Reinvestment</th><th>Portfolio</th><th>Tag</th><th>Ageing</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var t in row.Rows)
+                                    {
+                                        <tr>
+                                            <td>@t.Account</td><td>@t.Name <small class="text-muted">(@t.Symbol)</small></td><td>@(t.Date == DateTime.MinValue ? "-" : t.Date.ToString("dd MMM yyyy"))</td><td class="text-end">@Math.Round(t.Quantity, 4)</td><td class="text-end">@Math.Round(t.BuyPrice, 2)</td><td class="text-end">@Math.Round(t.TotalCost, 2)</td><td class="text-end">@Math.Round(t.CurrentValue, 2)</td><td class="text-end @(t.ProfitLoss >= 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(t.ProfitLoss, 2)</td><td class="text-end">@Math.Round(t.Dividend, 2)</td><td class="text-end">@Math.Round(t.DividendReinvestment, 2)</td><td>@t.Portfolio</td><td>@t.Tag</td><td>@t.Ageing</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @foreach (var row in Model.Monthly)
+    {
+        var modalId = $"monthModal_{row.PeriodDate:yyyyMM}";
+        <div class="modal fade portfolio-modal" id="@modalId" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">@row.PeriodLabel - Transaction Breakdown</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body p-0">
+                        <div class="table-host">
+                            <table class="table table-hover mb-0 diary-modal-table">
+                                <thead>
+                                    <tr>
+                                        <th>Account</th><th>Name</th><th>Date</th><th class="text-end">Qty</th><th class="text-end">Buy Price</th><th class="text-end">Total Cost</th><th class="text-end">Current Value</th><th class="text-end">P&L</th><th class="text-end">Dividend</th><th class="text-end">Dividend Reinvestment</th><th>Portfolio</th><th>Tag</th><th>Ageing</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var t in row.Rows)
+                                    {
+                                        <tr>
+                                            <td>@t.Account</td><td>@t.Name <small class="text-muted">(@t.Symbol)</small></td><td>@(t.Date == DateTime.MinValue ? "-" : t.Date.ToString("dd MMM yyyy"))</td><td class="text-end">@Math.Round(t.Quantity, 4)</td><td class="text-end">@Math.Round(t.BuyPrice, 2)</td><td class="text-end">@Math.Round(t.TotalCost, 2)</td><td class="text-end">@Math.Round(t.CurrentValue, 2)</td><td class="text-end @(t.ProfitLoss >= 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(t.ProfitLoss, 2)</td><td class="text-end">@Math.Round(t.Dividend, 2)</td><td class="text-end">@Math.Round(t.DividendReinvestment, 2)</td><td>@t.Portfolio</td><td>@t.Tag</td><td>@t.Ageing</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            $('#bonusSplitAdjusted').on('change', function () {
+                $('#bonusSplitAdjustedValue').val(this.checked ? 'true' : 'false');
+                this.form.submit();
+            });
+
+            $('table.diary-table').DataTable({
+                responsive: true,
+                autoWidth: false,
+                fixedHeader: true,
+                pageLength: 15,
+                order: []
+            });
+
+            $('.portfolio-modal').on('shown.bs.modal', function () {
+                var $table = $(this).find('table.diary-modal-table');
+                if ($table.length === 0 || $.fn.dataTable.isDataTable($table[0])) {
+                    return;
+                }
+                $table.DataTable({
+                    responsive: true,
+                    autoWidth: false,
+                    pageLength: 10,
+                    order: []
+                });
+            });
+        });
+    </script>
+}

@@ -1,0 +1,108 @@
+@model PortfolioNew.Models.PortfolioDiaryResponseModel
+@{
+    ViewData["Title"] = "Portfolio Diary";
+}
+
+<div class="container-fluid dashboard-container pt-4">
+    <div class="summary-dashboard mb-3">
+        <div class="summary-item">
+            <div class="stat-card">
+                <div class="stat-label">Grand Total Invested</div>
+                <div class="stat-value">₹@Math.Round(Model.GrandTotal, 0).ToString("N0")</div>
+                <div class="stat-meta">@Model.Portfolios.Count portfolios</div>
+            </div>
+        </div>
+    </div>
+
+    <ul class="nav nav-tabs mb-2" role="tablist">
+        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#yearly" type="button">Yearly</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#monthly" type="button">Monthly</button></li>
+    </ul>
+
+    <div class="tab-content">
+        <div class="tab-pane fade show active" id="yearly">
+            <div class="modern-card mb-4">
+                <div class="card-body p-0">
+                    <div class="table-host">
+                        <table class="table table-hover diary-matrix-table" id="portfolioYearlyTable">
+                            <thead>
+                                <tr>
+                                    <th>Year</th>
+                                    @foreach (var p in Model.Portfolios)
+                                    {
+                                        <th class="text-end">@p</th>
+                                    }
+                                    <th class="text-end">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var r in Model.YearlyRows)
+                                {
+                                    <tr>
+                                        <td>@r.PeriodLabel</td>
+                                        @foreach (var p in Model.Portfolios)
+                                        {
+                                            <td class="text-end">@Math.Round(r.PortfolioValues[p], 2)</td>
+                                        }
+                                        <td class="text-end fw-bold">@Math.Round(r.Total, 2)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="monthly">
+            <div class="modern-card mb-4">
+                <div class="card-body p-0">
+                    <div class="table-host">
+                        <table class="table table-hover diary-matrix-table" id="portfolioMonthlyTable">
+                            <thead>
+                                <tr>
+                                    <th>Month</th>
+                                    @foreach (var p in Model.Portfolios)
+                                    {
+                                        <th class="text-end">@p</th>
+                                    }
+                                    <th class="text-end">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var r in Model.MonthlyRows)
+                                {
+                                    <tr>
+                                        <td>@r.PeriodLabel</td>
+                                        @foreach (var p in Model.Portfolios)
+                                        {
+                                            <td class="text-end">@Math.Round(r.PortfolioValues[p], 2)</td>
+                                        }
+                                        <td class="text-end fw-bold">@Math.Round(r.Total, 2)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            $('table.diary-matrix-table').DataTable({
+                responsive: true,
+                autoWidth: false,
+                fixedHeader: true,
+                pageLength: 15,
+                order: []
+            });
+            $('button[data-bs-toggle="tab"]').on('shown.bs.tab', function () {
+                $($.fn.dataTable.tables(true)).DataTable().columns.adjust().responsive.recalc();
+            });
+        });
+    </script>
+}
