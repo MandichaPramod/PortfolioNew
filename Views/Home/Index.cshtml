@@ -146,6 +146,19 @@
             <button class="btn btn-sm btn-outline-light" data-view-mode="risk" type="button">Risk</button>
             <button class="btn btn-sm btn-outline-light" data-view-mode="income" type="button">Income</button>
         </div>
+        <div class="toolbar-group d-lg-none" id="mobileSortGroup">
+            <span class="toolbar-label">Sort By</span>
+            <select id="mobileSortSelect" class="form-select form-select-sm" style="max-width: 170px;">
+                <option value="profit" selected>Profit/Loss</option>
+                <option value="change">Change</option>
+                <option value="percentage">%Profit/Loss</option>
+                <option value="change-percentage">%Change</option>
+            </select>
+            <select id="mobileSortDirection" class="form-select form-select-sm" style="max-width: 150px;">
+                <option value="desc" selected>High to Low</option>
+                <option value="asc">Low to High</option>
+            </select>
+        </div>
         <div class="toolbar-group" id="quickFilterGroup">
             <span class="toolbar-label">Quick Filters</span>
             <button class="btn btn-sm btn-outline-info active" data-quick-filter="all" type="button">All</button>
@@ -580,7 +593,10 @@
                     table.column(11).visible(showChangeCols, false);
                 }
 
-                if (mode === "income") {
+                var mobileSort = getMobileSortOrder(tableId);
+                if (mobileSort) {
+                    table.order([mobileSort]);
+                } else if (mode === "income") {
                     table.order([[4, 'desc']]);
                 } else if (mode === "risk") {
                     table.order([[1, 'desc']]);
@@ -589,6 +605,27 @@
                 }
 
                 table.columns.adjust().draw(false);
+            }
+
+            function getMobileSortOrder(tableId) {
+                if (!window.matchMedia('(max-width: 991.98px)').matches) {
+                    return null;
+                }
+
+                var key = $('#mobileSortSelect').val() || "profit";
+                var direction = $('#mobileSortDirection').val() || "desc";
+                var isConsolidated = tableId === "consolidatedTable";
+
+                if (key === "change") {
+                    return isConsolidated ? [9, direction] : [7, direction];
+                }
+                if (key === "percentage") {
+                    return [8, direction];
+                }
+                if (key === "change-percentage") {
+                    return isConsolidated ? [10, direction] : [8, direction];
+                }
+                return [7, direction];
             }
 
             function applyViewMode(mode) {
@@ -757,7 +794,10 @@
             updateStickyOffsets();
             updateSummaryForTab("Consolidated");
             applyViewMode(activeViewMode);
-            $(window).on('resize', updateStickyOffsets);
+            $(window).on('resize', function () {
+                updateStickyOffsets();
+                applyViewMode(activeViewMode);
+            });
             $('button[data-bs-toggle="tab"]').on('shown.bs.tab', function () {
                 var tabKey = $(this).data('tab-key');
                 if (tabKey) {
@@ -788,6 +828,13 @@
                 $('#viewModeGroup [data-view-mode]').removeClass('active');
                 $(this).addClass('active');
                 applyViewMode($(this).data('view-mode'));
+            });
+
+            $('#mobileSortSelect').on('change', function () {
+                applyViewMode(activeViewMode);
+            });
+            $('#mobileSortDirection').on('change', function () {
+                applyViewMode(activeViewMode);
             });
 
             $('#quickFilterGroup [data-quick-filter]').on('click', function () {

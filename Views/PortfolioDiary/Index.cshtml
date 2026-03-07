@@ -1,17 +1,57 @@
 @model PortfolioNew.Models.PortfolioDiaryResponseModel
 @{
     ViewData["Title"] = "Portfolio Diary";
+    var txJson = System.Text.Json.JsonSerializer.Serialize(Model.Transactions.Select(t => new
+    {
+        date = t.Date == DateTime.MinValue ? "" : t.Date.ToString("yyyy-MM-dd"),
+        portfolio = t.Portfolio,
+        account = t.Account,
+        tag = t.Tag,
+        symbol = t.Symbol,
+        name = t.Name,
+        totalCost = t.TotalCost,
+        quantity = t.Quantity,
+        buyPrice = t.BuyPrice
+    }));
 }
 
 <div class="container-fluid dashboard-container pt-4">
-    <div class="summary-dashboard mb-3">
-        <div class="summary-item">
-            <div class="stat-card">
-                <div class="stat-label">Grand Total Invested</div>
-                <div class="stat-value">₹@Math.Round(Model.GrandTotal, 0).ToString("N0")</div>
-                <div class="stat-meta">@Model.Portfolios.Count portfolios</div>
-            </div>
+    <form method="get" asp-controller="PortfolioDiary" asp-action="Index" class="toolbar-strip mb-3">
+        <div class="toolbar-group">
+            <span class="toolbar-label">Account</span>
+            <select name="account" class="form-select form-select-sm" style="max-width:180px;">
+                <option value="All" selected="@(Model.AccountFilter.Equals("All", StringComparison.OrdinalIgnoreCase))">All</option>
+                @foreach (var a in Model.Accounts)
+                {
+                    <option value="@a" selected="@(Model.AccountFilter.Equals(a, StringComparison.OrdinalIgnoreCase))">@a</option>
+                }
+            </select>
         </div>
+        <div class="toolbar-group">
+            <span class="toolbar-label">Symbol</span>
+            <input name="symbol" value="@Model.SymbolFilter" class="form-control form-control-sm" style="max-width:180px;" />
+        </div>
+        <div class="toolbar-group">
+            <button class="btn btn-sm btn-outline-light" type="submit">Apply</button>
+        </div>
+    </form>
+
+    <div class="toolbar-strip mb-3">
+        <div class="toolbar-group" id="valueModeGroup">
+            <span class="toolbar-label">Value Mode</span>
+            <button class="btn btn-sm btn-outline-light active" data-mode="absolute" type="button">Absolute</button>
+            <button class="btn btn-sm btn-outline-light" data-mode="percent" type="button">%</button>
+        </div>
+    </div>
+
+    <div class="insight-strip mb-3">
+        <div class="insight-col"><div class="insight-title">Yearly Stacked Contributions</div><canvas id="yearlyStackedChart" height="130"></canvas></div>
+        <div class="insight-col"><div class="insight-title">Monthly Stacked Contributions</div><canvas id="monthlyStackedChart" height="130"></canvas></div>
+    </div>
+    <div class="insight-col mb-3"><div class="insight-title">Cumulative Invested Over Time</div><canvas id="cumulativeLineChart" height="90"></canvas></div>
+
+    <div class="summary-dashboard mb-3">
+        <div class="summary-item"><div class="stat-card"><div class="stat-label">Grand Total Invested</div><div class="stat-value">₹@Math.Round(Model.GrandTotal, 0).ToString("N0")</div><div class="stat-meta">@Model.Portfolios.Count portfolios</div></div></div>
     </div>
 
     <ul class="nav nav-tabs mb-2" role="tablist">
@@ -24,27 +64,31 @@
             <div class="modern-card mb-4">
                 <div class="card-body p-0">
                     <div class="table-host">
-                        <table class="table table-hover diary-matrix-table" id="portfolioYearlyTable">
+                        <table class="table table-hover diary-matrix-table diary-sticky-table" id="portfolioYearlyTable">
                             <thead>
                                 <tr>
                                     <th>Year</th>
-                                    @foreach (var p in Model.Portfolios)
-                                    {
-                                        <th class="text-end">@p</th>
-                                    }
+                                    @foreach (var p in Model.Portfolios) { <th class="text-end">@p</th> }
                                     <th class="text-end">Total</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @foreach (var r in Model.YearlyRows)
                                 {
-                                    <tr>
-                                        <td>@r.PeriodLabel</td>
+                                    <tr data-period-type="yearly" data-year="@r.Year" data-month="@r.Month">
+                                        <td class="drill-cell" data-drill="1" data-period-type="yearly" data-year="@r.Year" data-month="@r.Month" data-portfolio="All">
+                                            @r.PeriodLabel
+                                            @if (!string.IsNullOrWhiteSpace(r.TopPortfolio))
+                                            {
+                                                <span class="badge ms-1" title="Top contributor">Top: @r.TopPortfolio</span>
+                                            }
+                                        </td>
                                         @foreach (var p in Model.Portfolios)
                                         {
-                                            <td class="text-end">@Math.Round(r.PortfolioValues[p], 2)</td>
+                                            var v = r.PortfolioValues[p];
+                                            <td class="text-end heat-cell drill-cell" data-drill="1" data-period-type="yearly" data-year="@r.Year" data-month="@r.Month" data-portfolio="@p" data-value="@v" data-total="@r.Total">@Math.Round(v, 2)</td>
                                         }
-                                        <td class="text-end fw-bold">@Math.Round(r.Total, 2)</td>
+                                        <td class="text-end fw-bold drill-cell" data-drill="1" data-period-type="yearly" data-year="@r.Year" data-month="@r.Month" data-portfolio="All">@Math.Round(r.Total, 2)</td>
                                     </tr>
                                 }
                             </tbody>
@@ -58,27 +102,31 @@
             <div class="modern-card mb-4">
                 <div class="card-body p-0">
                     <div class="table-host">
-                        <table class="table table-hover diary-matrix-table" id="portfolioMonthlyTable">
+                        <table class="table table-hover diary-matrix-table diary-sticky-table" id="portfolioMonthlyTable">
                             <thead>
                                 <tr>
                                     <th>Month</th>
-                                    @foreach (var p in Model.Portfolios)
-                                    {
-                                        <th class="text-end">@p</th>
-                                    }
+                                    @foreach (var p in Model.Portfolios) { <th class="text-end">@p</th> }
                                     <th class="text-end">Total</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @foreach (var r in Model.MonthlyRows)
                                 {
-                                    <tr>
-                                        <td>@r.PeriodLabel</td>
+                                    <tr data-period-type="monthly" data-year="@r.Year" data-month="@r.Month">
+                                        <td class="drill-cell" data-drill="1" data-period-type="monthly" data-year="@r.Year" data-month="@r.Month" data-portfolio="All">
+                                            @r.PeriodLabel
+                                            @if (!string.IsNullOrWhiteSpace(r.TopPortfolio))
+                                            {
+                                                <span class="badge ms-1" title="Top contributor">Top: @r.TopPortfolio</span>
+                                            }
+                                        </td>
                                         @foreach (var p in Model.Portfolios)
                                         {
-                                            <td class="text-end">@Math.Round(r.PortfolioValues[p], 2)</td>
+                                            var v = r.PortfolioValues[p];
+                                            <td class="text-end heat-cell drill-cell" data-drill="1" data-period-type="monthly" data-year="@r.Year" data-month="@r.Month" data-portfolio="@p" data-value="@v" data-total="@r.Total">@Math.Round(v, 2)</td>
                                         }
-                                        <td class="text-end fw-bold">@Math.Round(r.Total, 2)</td>
+                                        <td class="text-end fw-bold drill-cell" data-drill="1" data-period-type="monthly" data-year="@r.Year" data-month="@r.Month" data-portfolio="All">@Math.Round(r.Total, 2)</td>
                                     </tr>
                                 }
                             </tbody>
@@ -90,18 +138,134 @@
     </div>
 </div>
 
+<div class="modal fade portfolio-modal" id="portfolioDiaryDrillModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="portfolioDiaryDrillTitle">Portfolio Drilldown</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div class="table-host">
+                    <table class="table table-hover mb-0" id="portfolioDiaryDrillTable">
+                        <thead>
+                            <tr><th>Date</th><th>Portfolio</th><th>Account</th><th>Name</th><th>Symbol</th><th>Tag</th><th class="text-end">Qty</th><th class="text-end">Buy Price</th><th class="text-end">Total Cost</th></tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 @section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
     <script>
-        $(document).ready(function () {
-            $('table.diary-matrix-table').DataTable({
-                responsive: true,
-                autoWidth: false,
-                fixedHeader: true,
-                pageLength: 15,
-                order: []
+        $(function () {
+            const tx = @Html.Raw(txJson);
+            const portfolios = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Portfolios));
+            const yearlyRows = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.YearlyRows.Select(r => new { year = r.Year, periodLabel = r.PeriodLabel, portfolioValues = r.PortfolioValues, total = r.Total })));
+            const monthlyRows = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.MonthlyRows.Select(r => new { year = r.Year, month = r.Month, periodLabel = r.PeriodLabel, portfolioValues = r.PortfolioValues, total = r.Total })));
+
+            function buildStacked(canvasId, rows) {
+                const labels = rows.map(r => r.periodLabel);
+                const datasets = portfolios.map((p, i) => ({
+                    label: p,
+                    data: rows.map(r => (r.portfolioValues && r.portfolioValues[p]) ? r.portfolioValues[p] : 0),
+                    backgroundColor: `hsl(${(i * 47) % 360} 70% 55%)`,
+                    stack: 'stack1'
+                }));
+                new Chart(document.getElementById(canvasId), {
+                    type: 'bar',
+                    data: { labels, datasets },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#c9d1d9' } } }, scales: { x: { stacked: true, ticks: { color: '#8b949e' } }, y: { stacked: true, ticks: { color: '#8b949e' } } } }
+                });
+            }
+
+            function buildCumulative(canvasId) {
+                const quarterMap = {};
+                tx.filter(t => t.date).forEach(t => {
+                    const d = new Date(t.date + 'T00:00:00');
+                    const q = Math.floor(d.getMonth() / 3) + 1;
+                    const key = `${d.getFullYear()}-Q${q}`;
+                    quarterMap[key] = (quarterMap[key] || 0) + Number(t.totalCost || 0);
+                });
+                const sortedKeys = Object.keys(quarterMap).sort((a, b) => {
+                    const [ya, qa] = a.split('-Q').map(Number);
+                    const [yb, qb] = b.split('-Q').map(Number);
+                    return ya === yb ? qa - qb : ya - yb;
+                });
+                let running = 0;
+                const labels = [];
+                const vals = [];
+                sortedKeys.forEach(k => { running += quarterMap[k]; labels.push(k); vals.push(running); });
+                new Chart(document.getElementById(canvasId), {
+                    type: 'line',
+                    data: { labels, datasets: [{ label: 'Cumulative Invested', data: vals, borderColor: '#58a6ff', tension: 0.2 }] },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#c9d1d9' } } }, scales: { x: { ticks: { color: '#8b949e' } }, y: { ticks: { color: '#8b949e' } } } }
+                });
+            }
+
+            buildStacked('yearlyStackedChart', yearlyRows);
+            buildStacked('monthlyStackedChart', monthlyRows);
+            buildCumulative('cumulativeLineChart');
+
+            $('table.diary-matrix-table').DataTable({ responsive: true, autoWidth: false, fixedHeader: true, pageLength: 15, order: [] });
+            $('button[data-bs-toggle="tab"]').on('shown.bs.tab', function () { $($.fn.dataTable.tables(true)).DataTable().columns.adjust().responsive.recalc(); });
+
+            function applyHeatmap() {
+                $('.heat-cell').each(function () {
+                    const v = Number($(this).attr('data-value') || 0);
+                    const t = Number($(this).attr('data-total') || 0);
+                    const ratio = t > 0 ? Math.min(1, Math.max(0, v / t)) : 0;
+                    $(this).css('background', `rgba(88,166,255,${0.10 + (0.35 * ratio)})`);
+                });
+                $('.drill-cell').css('cursor', 'pointer');
+            }
+            applyHeatmap();
+
+            $('#valueModeGroup [data-mode]').on('click', function () {
+                $('#valueModeGroup [data-mode]').removeClass('active');
+                $(this).addClass('active');
+                const mode = $(this).data('mode');
+                $('.heat-cell').each(function () {
+                    const v = Number($(this).attr('data-value') || 0);
+                    const t = Number($(this).attr('data-total') || 0);
+                    $(this).text(mode === 'percent' ? `${(t > 0 ? (v * 100 / t) : 0).toFixed(2)}%` : v.toFixed(2));
+                });
             });
-            $('button[data-bs-toggle="tab"]').on('shown.bs.tab', function () {
-                $($.fn.dataTable.tables(true)).DataTable().columns.adjust().responsive.recalc();
+
+            const drillModal = new bootstrap.Modal(document.getElementById('portfolioDiaryDrillModal'));
+            let drillDt = null;
+            function matchPeriod(t, periodType, year, month) {
+                if (!t.date) return false;
+                const d = new Date(t.date + 'T00:00:00');
+                if (periodType === 'yearly') return d.getFullYear() === Number(year);
+                return d.getFullYear() === Number(year) && (d.getMonth() + 1) === Number(month);
+            }
+            function showDrill(periodType, year, month, portfolio) {
+                const normalizedPortfolio = (portfolio || '').toString().trim();
+                const isAll = normalizedPortfolio.length === 0 || normalizedPortfolio.toLowerCase() === 'all';
+                const titlePeriod = periodType === 'yearly' ? year : `${month}-${year}`;
+                $('#portfolioDiaryDrillTitle').text(`${titlePeriod} > ${isAll ? 'All Portfolios' : normalizedPortfolio} Transactions`);
+                const rows = tx.filter(t => {
+                    if (!matchPeriod(t, periodType, year, month)) return false;
+                    if (isAll) return true;
+                    return ((t.portfolio || '').toString().trim().toLowerCase() === normalizedPortfolio.toLowerCase());
+                });
+                const tbody = $('#portfolioDiaryDrillTable tbody').empty();
+                rows.forEach(r => {
+                    tbody.append(`<tr><td>${r.date || '-'}</td><td>${r.portfolio || ''}</td><td>${r.account || ''}</td><td>${r.name || ''}</td><td>${r.symbol || ''}</td><td>${r.tag || ''}</td><td class="text-end">${Number(r.quantity || 0).toFixed(4)}</td><td class="text-end">${Number(r.buyPrice || 0).toFixed(2)}</td><td class="text-end">${Number(r.totalCost || 0).toFixed(2)}</td></tr>`);
+                });
+                if (drillDt && $.fn.dataTable.isDataTable('#portfolioDiaryDrillTable')) {
+                    drillDt.clear().destroy();
+                }
+                drillDt = $('#portfolioDiaryDrillTable').DataTable({ responsive: true, autoWidth: false, pageLength: 10, order: [[0, 'desc']] });
+                drillModal.show();
+            }
+            $(document).on('click', '.drill-cell', function () {
+                showDrill($(this).data('period-type'), $(this).data('year'), $(this).data('month'), $(this).data('portfolio'));
             });
         });
     </script>

@@ -872,6 +872,38 @@ footer a:hover {
     z-index: 2;
 }
 
+@media (min-width: 992px) {
+    .diary-sticky-table thead th:first-child,
+    .diary-sticky-table tbody td:first-child {
+        position: sticky;
+        left: 0;
+        z-index: 4;
+        background-color: var(--secondary-dark) !important;
+        box-shadow: 1px 0 0 var(--border-color);
+    }
+
+    .diary-sticky-table thead th:last-child,
+    .diary-sticky-table tbody td:last-child {
+        position: sticky;
+        right: 0;
+        z-index: 4;
+        background-color: var(--secondary-dark) !important;
+        box-shadow: -1px 0 0 var(--border-color);
+    }
+
+    .diary-sticky-table thead th:first-child,
+    .diary-sticky-table thead th:last-child {
+        background-color: var(--tertiary-dark) !important;
+        z-index: 1036;
+    }
+}
+
+#yearlyStackedChart,
+#monthlyStackedChart,
+#cumulativeLineChart {
+    max-height: 220px;
+}
+
 @media (max-width: 991.98px) {
     .dtr-tabs {
         display: grid;

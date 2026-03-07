@@ -17,14 +17,28 @@ namespace PortfolioNew.Controllers
             _memoryCache = memoryCache;
         }
 
-        public IActionResult Index()
+        public IActionResult Index(string? account = null, string? tag = null, string? symbol = null)
         {
             var rows = ParseRows(GetSheetDataCached(BreakdownCacheKey, "Breakdown", "A3:P"))
                 .OrderBy(x => x.Date)
                 .ToList();
 
+            var accounts = rows.Select(r => r.Account).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToList();
+            var tags = rows.Select(r => r.Tag).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToList();
+
+            var accountFilter = string.IsNullOrWhiteSpace(account) ? "All" : account.Trim();
+            var tagFilter = string.IsNullOrWhiteSpace(tag) ? "All" : tag.Trim();
+            var symbolFilter = string.IsNullOrWhiteSpace(symbol) ? "" : symbol.Trim();
+
+            var filteredRows = rows.Where(r =>
+                    (accountFilter.Equals("All", StringComparison.OrdinalIgnoreCase) || string.Equals(r.Account, accountFilter, StringComparison.OrdinalIgnoreCase)) &&
+                    (tagFilter.Equals("All", StringComparison.OrdinalIgnoreCase) || string.Equals(r.Tag, tagFilter, StringComparison.OrdinalIgnoreCase)) &&
+                    (string.IsNullOrWhiteSpace(symbolFilter) || r.Symbol.Contains(symbolFilter, StringComparison.OrdinalIgnoreCase) || r.Name.Contains(symbolFilter, StringComparison.OrdinalIgnoreCase)))
+                .OrderBy(x => x.Date)
+                .ToList();
+
             var portfolios = new List<string>();
-            foreach (var r in rows)
+            foreach (var r in filteredRows)
             {
                 if (!string.IsNullOrWhiteSpace(r.Portfolio) && !portfolios.Contains(r.Portfolio))
                 {
@@ -32,7 +46,7 @@ namespace PortfolioNew.Controllers
                 }
             }
 
-            var yearly = rows
+            var yearly = filteredRows
                 .GroupBy(x => x.Date.Year)
                 .OrderByDescending(g => g.Key)
                 .Select(g =>
@@ -45,16 +59,21 @@ namespace PortfolioNew.Controllers
                             values[r.Portfolio] = values[r.Portfolio] + r.TotalCost;
                         }
                     }
+                    var top = values.OrderByDescending(v => v.Value).FirstOrDefault();
                     return new PortfolioDiaryMatrixRow
                     {
+                        Year = g.Key,
+                        Month = 0,
                         PeriodLabel = g.Key.ToString(),
                         PortfolioValues = values,
-                        Total = values.Values.Sum()
+                        Total = values.Values.Sum(),
+                        TopPortfolio = top.Key ?? "",
+                        TopValue = top.Value
                     };
                 })
                 .ToList();
 
-            var monthly = rows
+            var monthly = filteredRows
                 .GroupBy(x => new { x.Date.Year, x.Date.Month })
                 .OrderByDescending(g => g.Key.Year)
                 .ThenByDescending(g => g.Key.Month)
@@ -68,29 +87,77 @@ namespace PortfolioNew.Controllers
                             values[r.Portfolio] = values[r.Portfolio] + r.TotalCost;
                         }
                     }
+                    var top = values.OrderByDescending(v => v.Value).FirstOrDefault();
                     return new PortfolioDiaryMatrixRow
                     {
+                        Year = g.Key.Year,
+                        Month = g.Key.Month,
                         PeriodLabel = $"{g.Key.Month}-{g.Key.Year}",
                         PortfolioValues = values,
-                        Total = values.Values.Sum()
+                        Total = values.Values.Sum(),
+                        TopPortfolio = top.Key ?? "",
+                        TopValue = top.Value
                     };
                 })
                 .ToList();
 
+            ApplyDeltas(yearly);
+            ApplyDeltas(monthly);
+
             return View(new PortfolioDiaryResponseModel
             {
+                AccountFilter = accountFilter,
+                TagFilter = tagFilter,
+                SymbolFilter = symbolFilter,
+                Accounts = accounts,
+                Tags = tags,
                 Portfolios = portfolios,
+                Transactions = filteredRows.Select(x => new PortfolioDiaryTransactionRow
+                {
+                    Symbol = x.Symbol,
+                    Name = x.Name,
+                    Account = x.Account,
+                    Tag = x.Tag,
+                    Portfolio = x.Portfolio,
+                    Date = x.Date,
+                    TotalCost = x.TotalCost,
+                    Quantity = x.Quantity,
+                    BuyPrice = x.BuyPrice
+                }).ToList(),
                 YearlyRows = yearly,
                 MonthlyRows = monthly,
-                GrandTotal = rows.Sum(x => x.TotalCost)
+                GrandTotal = filteredRows.Sum(x => x.TotalCost)
             });
+        }
+
+        private static void ApplyDeltas(List<PortfolioDiaryMatrixRow> rowsDesc)
+        {
+            for (int i = 0; i < rowsDesc.Count; i++)
+            {
+                var current = rowsDesc[i];
+                if (i == rowsDesc.Count - 1)
+                {
+                    current.Delta = 0;
+                    current.DeltaPercent = 0;
+                    continue;
+                }
+                var prev = rowsDesc[i + 1];
+                current.Delta = current.Total - prev.Total;
+                current.DeltaPercent = prev.Total > 0 ? (current.Delta * 100 / prev.Total) : 0;
+            }
         }
 
         private sealed class DiaryRow
         {
+            public string Symbol { get; set; } = "";
+            public string Name { get; set; } = "";
+            public string Account { get; set; } = "";
+            public string Tag { get; set; } = "";
             public DateTime Date { get; set; }
             public double TotalCost { get; set; }
             public string Portfolio { get; set; } = "";
+            public double Quantity { get; set; }
+            public double BuyPrice { get; set; }
         }
 
         private static List<DiaryRow> ParseRows(List<List<object>> rows)
@@ -133,7 +200,13 @@ namespace PortfolioNew.Controllers
 
                 list.Add(new DiaryRow
                 {
+                    Symbol = symbol,
+                    Name = name,
+                    Account = row[2]?.ToString()?.Trim() ?? "",
+                    Tag = row[12]?.ToString()?.Trim() ?? "",
                     Date = ParseDate(row[3]),
+                    Quantity = ParseDouble(row[4]),
+                    BuyPrice = ParseDouble(row[5]),
                     TotalCost = ParseDouble(row[6]),
                     Portfolio = row[11]?.ToString()?.Trim() ?? ""
                 });
