@@ -831,6 +831,47 @@ footer a:hover {
     overflow-x: auto;
 }
 
+.charge-donut-card {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    background: rgba(33, 38, 45, 0.6);
+}
+
+.charge-donut {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    position: relative;
+}
+
+.charge-donut::after {
+    content: "";
+    position: absolute;
+    inset: 7px;
+    background: var(--secondary-dark);
+    border-radius: 50%;
+}
+
+.charge-donut-meta {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.rp-footer {
+    background-color: var(--tertiary-dark) !important;
+    color: var(--text-secondary) !important;
+    font-weight: 700;
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+}
+
 @media (max-width: 991.98px) {
     .dtr-tabs {
         display: grid;
