@@ -1,0 +1,519 @@
+@model PortfolioNew.Models.SummaryResponseModel
+@{
+    ViewData["Title"] = "Summary";
+    var pnlPct = Model.TotalInvested > 0 ? (Model.UnrealisedPnL * 100 / Model.TotalInvested) : 0;
+    var changePct = (Model.CurrentValue - Model.DailyChange) > 0
+        ? (100 * Model.DailyChange / (Model.CurrentValue - Model.DailyChange))
+        : 0;
+    var detailsJson = System.Text.Json.JsonSerializer.Serialize(Model.HoldingDetails);
+    var marketCapLabelsJson = System.Text.Json.JsonSerializer.Serialize(Model.MarketCapLabels);
+    var marketCapInvestedJson = System.Text.Json.JsonSerializer.Serialize(Model.MarketCapInvestedValues);
+    var marketCapCurrentJson = System.Text.Json.JsonSerializer.Serialize(Model.MarketCapCurrentValues);
+    var marketCapPercentJson = System.Text.Json.JsonSerializer.Serialize(Model.MarketCapPercentValues);
+    var profitHistoryLabelsJson = System.Text.Json.JsonSerializer.Serialize(Model.ProfitHistoryLabels);
+    var profitHistoryValuesJson = System.Text.Json.JsonSerializer.Serialize(Model.ProfitHistoryValues);
+}
+
+<div class="container-fluid dashboard-container pt-4">
+    <div id="summaryStickyStack" class="sticky-stack summary-sticky-stack mb-3">
+        <div class="toolbar-strip mb-2">
+            <form method="get" asp-controller="Summary" asp-action="Index" class="toolbar-group">
+                <span class="toolbar-label">Range</span>
+                <select name="range" class="form-select form-select-sm" style="max-width: 130px;">
+                    <option value="all" selected="@(Model.Range == "all")">All</option>
+                    <option value="mtd" selected="@(Model.Range == "mtd")">MTD</option>
+                    <option value="ytd" selected="@(Model.Range == "ytd")">YTD</option>
+                    <option value="1y" selected="@(Model.Range == "1y")">1Y</option>
+                </select>
+                <button class="btn btn-sm btn-outline-light" type="submit">Apply</button>
+            </form>
+            <div class="toolbar-group summary-status-strip">
+                <span class="badge">Last refresh: @Model.BreakdownCacheLoadedAt.ToString("dd MMM yyyy HH:mm:ss")</span>
+                <span class="badge @(Model.CacheAgeMinutes >= 15 ? "summary-badge-danger" : "summary-badge-info")">
+                    Cache age: @Model.CacheAgeMinutes min
+                </span>
+                <span class="badge">Generated: @Model.GeneratedAt.ToString("dd MMM yyyy HH:mm:ss")</span>
+            </div>
+        </div>
+
+        <div class="toolbar-strip mb-2">
+            <div class="toolbar-group">
+                <span class="toolbar-label">Anomalies</span>
+                <span class="badge summary-badge-danger">Negative Dividend: @Model.NegativeDividendCount</span>
+                <span class="badge summary-badge-warning">Zero Qty + Value: @Model.ZeroQuantityWithValueCount</span>
+                <span class="badge summary-badge-info">Stale &gt; 365d: @Model.StaleHoldingCount</span>
+            </div>
+            <div class="toolbar-group">
+                <span class="toolbar-label">
+                    Window:
+                    @if (Model.RangeStart.HasValue)
+                    {
+                        @($"{Model.RangeStart.Value:dd MMM yyyy} - {Model.RangeEnd:dd MMM yyyy}")
+                    }
+                    else
+                    {
+                        @("Full History")
+                    }
+                </span>
+            </div>
+        </div>
+
+        <div class="summary-dashboard mb-2 summary-dashboard-compact">
+            <div class="summary-item">
+                <div class="stat-card">
+                    <div class="stat-label">Total Invested</div>
+                    <div class="stat-value">&#8377;@Math.Round(Model.TotalInvested, 0).ToString("N0")</div>
+                    <div class="stat-meta">@Model.Holdings holdings</div>
+                </div>
+            </div>
+            <div class="summary-item">
+                <div class="stat-card">
+                    <div class="stat-label">Current Value</div>
+                    <div class="stat-value">&#8377;@Math.Round(Model.CurrentValue, 0).ToString("N0")</div>
+                    <div class="stat-meta">Current snapshot</div>
+                </div>
+            </div>
+            <div class="summary-item">
+                <div class="stat-card">
+                    <div class="stat-label">Dividends</div>
+                    <div class="stat-value text-success">&#8377;@Math.Round(Model.Dividends, 0).ToString("N0")</div>
+                    <div class="stat-meta">Net earned</div>
+                </div>
+            </div>
+            <div class="summary-item">
+                <div class="stat-card @(Model.UnrealisedPnL >= 0 ? "stat-card-success" : "stat-card-danger")">
+                    <div class="stat-label">Unrealised P&amp;L</div>
+                    <div class="stat-value">&#8377;@Math.Round(Model.UnrealisedPnL, 0).ToString("N0")</div>
+                    <div class="stat-meta">@Math.Round(pnlPct, 2)%</div>
+                </div>
+            </div>
+            <div class="summary-item">
+                <div class="stat-card @(Model.DailyChange >= 0 ? "stat-card-success" : "stat-card-danger")">
+                    <div class="stat-label">Daily Change</div>
+                    <div class="stat-value">&#8377;@Math.Round(Model.DailyChange, 0).ToString("N0")</div>
+                    <div class="stat-meta">@Math.Round(changePct, 2)%</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="insight-strip mb-3">
+        <div class="insight-col">
+            <div class="insight-title">Top Portfolios</div>
+            <div class="insight-item">
+                <span>By Current Value</span>
+                <span></span>
+            </div>
+            @foreach (var r in Model.TopPortfolioByCurrent)
+            {
+                <div class="insight-item metric-positive"><span>@r.Name</span><span>@Math.Round(r.Value, 0).ToString("N0")</span></div>
+            }
+            <div class="insight-item">
+                <span>By P&amp;L</span>
+                <span></span>
+            </div>
+            @foreach (var r in Model.TopPortfolioByPnL)
+            {
+                <div class="insight-item @(r.Value >= 0 ? "metric-positive" : "metric-negative")"><span>@r.Name</span><span>@Math.Round(r.Value, 0).ToString("N0")</span></div>
+            }
+            <div class="insight-item">
+                <span>By Daily Change</span>
+                <span></span>
+            </div>
+            @foreach (var r in Model.TopPortfolioByChange)
+            {
+                <div class="insight-item @(r.Value >= 0 ? "metric-positive" : "metric-negative")"><span>@r.Name</span><span>@Math.Round(r.Value, 0).ToString("N0")</span></div>
+            }
+        </div>
+        <div class="insight-col">
+            <div class="insight-title">Top Accounts</div>
+            <div class="insight-item">
+                <span>By Current Value</span>
+                <span></span>
+            </div>
+            @foreach (var r in Model.TopAccountByCurrent)
+            {
+                <div class="insight-item metric-positive"><span>@r.Name</span><span>@Math.Round(r.Value, 0).ToString("N0")</span></div>
+            }
+            <div class="insight-item">
+                <span>By P&amp;L</span>
+                <span></span>
+            </div>
+            @foreach (var r in Model.TopAccountByPnL)
+            {
+                <div class="insight-item @(r.Value >= 0 ? "metric-positive" : "metric-negative")"><span>@r.Name</span><span>@Math.Round(r.Value, 0).ToString("N0")</span></div>
+            }
+            <div class="insight-item">
+                <span>By Daily Change</span>
+                <span></span>
+            </div>
+            @foreach (var r in Model.TopAccountByChange)
+            {
+                <div class="insight-item @(r.Value >= 0 ? "metric-positive" : "metric-negative")"><span>@r.Name</span><span>@Math.Round(r.Value, 0).ToString("N0")</span></div>
+            }
+        </div>
+    </div>
+
+    <div class="insight-strip mb-3">
+        <div class="insight-col">
+            <div class="insight-title">Market Cap Distribution</div>
+            <div class="summary-chart-wrap">
+                <canvas id="summaryMarketCapChart"></canvas>
+            </div>
+        </div>
+        <div class="insight-col">
+            <div class="insight-title">Profit History</div>
+            <div class="summary-chart-wrap">
+                <canvas id="summaryProfitHistoryChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="modern-card mb-4">
+        <div class="card-header"><h5 class="mb-0">Portfolio Summary</h5></div>
+        <div class="card-body p-0">
+            <div class="table-host">
+                <table class="table table-hover dt-responsive" id="summaryPortfolioTable">
+                    <thead>
+                        <tr>
+                            <th>Portfolio</th>
+                            <th class="text-end">Holdings</th>
+                            <th class="text-end">Total Invested</th>
+                            <th class="text-end">Current Value</th>
+                            <th class="text-end">Weight %</th>
+                            <th class="text-end">Dividends</th>
+                            <th class="text-end">Dividend %</th>
+                            <th class="text-end">Unrealised P&amp;L</th>
+                            <th class="text-end">P&amp;L %</th>
+                            <th class="text-end">Daily Change</th>
+                            <th class="text-end">Change %</th>
+                            <th>Trend</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in Model.PortfolioSummary)
+                        {
+                            var valueSeries = string.Join(",", r.ValueTrend.Select(v => Math.Round(v, 2).ToString(System.Globalization.CultureInfo.InvariantCulture)));
+                            var pnlSeries = string.Join(",", r.PnLTrend.Select(v => Math.Round(v, 2).ToString(System.Globalization.CultureInfo.InvariantCulture)));
+                            <tr class="summary-drill-row" data-drill-type="portfolio" data-drill-name="@r.Name">
+                                <td><a href="#" class="summary-drill-link">@r.Name</a></td>
+                                <td class="text-end">@r.Holdings</td>
+                                <td class="text-end">@Math.Round(r.TotalInvested, 2)</td>
+                                <td class="text-end">@Math.Round(r.CurrentValue, 2)</td>
+                                <td class="text-end">@Math.Round(r.WeightPercent, 2)%</td>
+                                <td class="text-end @(r.Dividends >= 0 ? "metric-positive" : "metric-negative")">@Math.Round(r.Dividends, 2)</td>
+                                <td class="text-end @(r.DividendYieldPercent >= 0 ? "metric-positive" : "metric-negative")">@Math.Round(r.DividendYieldPercent, 2)%</td>
+                                <td class="text-end @(r.UnrealisedPnL >= 0 ? "metric-positive" : "metric-negative")">@Math.Round(r.UnrealisedPnL, 2)</td>
+                                <td class="text-end @(r.PnLPercent >= 0 ? "metric-positive" : "metric-negative")">@Math.Round(r.PnLPercent, 2)%</td>
+                                <td class="text-end @(r.DailyChange >= 0 ? "metric-positive" : "metric-negative")">@Math.Round(r.DailyChange, 2)</td>
+                                <td class="text-end @(r.ChangePercent >= 0 ? "metric-positive" : "metric-negative")">@Math.Round(r.ChangePercent, 2)%</td>
+                                <td>
+                                    <div class="summary-trend-wrap">
+                                        <canvas class="summary-mini-trend" width="110" height="24" data-color="#58a6ff" data-series="@valueSeries"></canvas>
+                                        <canvas class="summary-mini-trend" width="110" height="24" data-color="#3fb950" data-series="@pnlSeries"></canvas>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="modern-card mb-4">
+        <div class="card-header"><h5 class="mb-0">Account Summary</h5></div>
+        <div class="card-body p-0">
+            <div class="table-host">
+                <table class="table table-hover dt-responsive" id="summaryAccountTable">
+                    <thead>
+                        <tr>
+                            <th>Account</th>
+                            <th class="text-end">Holdings</th>
+                            <th class="text-end">Total Invested</th>
+                            <th class="text-end">Current Value</th>
+                            <th class="text-end">Weight %</th>
+                            <th class="text-end">Dividends</th>
+                            <th class="text-end">Dividend %</th>
+                            <th class="text-end">Unrealised P&amp;L</th>
+                            <th class="text-end">P&amp;L %</th>
+                            <th class="text-end">Daily Change</th>
+                            <th class="text-end">Change %</th>
+                            <th>Trend</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in Model.AccountSummary)
+                        {
+                            var valueSeries = string.Join(",", r.ValueTrend.Select(v => Math.Round(v, 2).ToString(System.Globalization.CultureInfo.InvariantCulture)));
+                            var pnlSeries = string.Join(",", r.PnLTrend.Select(v => Math.Round(v, 2).ToString(System.Globalization.CultureInfo.InvariantCulture)));
+                            <tr class="summary-drill-row" data-drill-type="account" data-drill-name="@r.Name">
+                                <td><a href="#" class="summary-drill-link">@r.Name</a></td>
+                                <td class="text-end">@r.Holdings</td>
+                                <td class="text-end">@Math.Round(r.TotalInvested, 2)</td>
+                                <td class="text-end">@Math.Round(r.CurrentValue, 2)</td>
+                                <td class="text-end">@Math.Round(r.WeightPercent, 2)%</td>
+                                <td class="text-end @(r.Dividends >= 0 ? "metric-positive" : "metric-negative")">@Math.Round(r.Dividends, 2)</td>
+                                <td class="text-end @(r.DividendYieldPercent >= 0 ? "metric-positive" : "metric-negative")">@Math.Round(r.DividendYieldPercent, 2)%</td>
+                                <td class="text-end @(r.UnrealisedPnL >= 0 ? "metric-positive" : "metric-negative")">@Math.Round(r.UnrealisedPnL, 2)</td>
+                                <td class="text-end @(r.PnLPercent >= 0 ? "metric-positive" : "metric-negative")">@Math.Round(r.PnLPercent, 2)%</td>
+                                <td class="text-end @(r.DailyChange >= 0 ? "metric-positive" : "metric-negative")">@Math.Round(r.DailyChange, 2)</td>
+                                <td class="text-end @(r.ChangePercent >= 0 ? "metric-positive" : "metric-negative")">@Math.Round(r.ChangePercent, 2)%</td>
+                                <td>
+                                    <div class="summary-trend-wrap">
+                                        <canvas class="summary-mini-trend" width="110" height="24" data-color="#58a6ff" data-series="@valueSeries"></canvas>
+                                        <canvas class="summary-mini-trend" width="110" height="24" data-color="#3fb950" data-series="@pnlSeries"></canvas>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade portfolio-modal" id="summaryDrillModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="summaryDrillTitle">Holdings Breakdown</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div class="table-host">
+                    <table class="table table-hover mb-0 dt-responsive" id="summaryDrillTable">
+                        <thead>
+                            <tr>
+                                <th>Portfolio</th>
+                                <th>Account</th>
+                                <th>Name</th>
+                                <th>Symbol</th>
+                                <th>Date</th>
+                                <th class="text-end">Days</th>
+                                <th class="text-end">Qty</th>
+                                <th class="text-end">Buy Price</th>
+                                <th class="text-end">Current Price</th>
+                                <th class="text-end">Total Cost</th>
+                                <th class="text-end">Current Value</th>
+                                <th class="text-end">Dividend</th>
+                                <th class="text-end">P&amp;L</th>
+                                <th class="text-end">Change</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+    <script>
+        $(function () {
+            const details = @Html.Raw(detailsJson);
+            const marketCapLabels = @Html.Raw(marketCapLabelsJson);
+            const marketCapInvested = (@Html.Raw(marketCapInvestedJson) || []).map(v => Number(v)).map(v => Number.isFinite(v) ? v : null);
+            const marketCapCurrent = (@Html.Raw(marketCapCurrentJson) || []).map(v => Number(v)).map(v => Number.isFinite(v) ? v : null);
+            const marketCapPercent = (@Html.Raw(marketCapPercentJson) || []).map(v => Number(v)).map(v => Number.isFinite(v) ? v : null);
+            const profitHistoryLabels = @Html.Raw(profitHistoryLabelsJson);
+            const profitHistoryValues = (@Html.Raw(profitHistoryValuesJson) || []).map(v => Number(v)).map(v => Number.isFinite(v) ? v : null);
+            const drillModal = new bootstrap.Modal(document.getElementById('summaryDrillModal'));
+            let drillTable = null;
+
+            function metricClass(v) {
+                return Number(v || 0) >= 0 ? 'metric-positive' : 'metric-negative';
+            }
+
+            function drawMiniTrend(canvas) {
+                const seriesText = canvas.getAttribute('data-series') || '';
+                const color = canvas.getAttribute('data-color') || '#58a6ff';
+                const vals = seriesText.split(',').map(x => Number(x)).filter(x => !isNaN(x));
+                const ctx = canvas.getContext('2d');
+                const w = canvas.width;
+                const h = canvas.height;
+                ctx.clearRect(0, 0, w, h);
+                if (vals.length < 2) {
+                    return;
+                }
+
+                const min = Math.min.apply(null, vals);
+                const max = Math.max.apply(null, vals);
+                const span = (max - min) || 1;
+
+                ctx.beginPath();
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = color;
+                vals.forEach((v, i) => {
+                    const x = (i / (vals.length - 1)) * (w - 2) + 1;
+                    const y = h - 2 - ((v - min) / span) * (h - 4);
+                    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                });
+                ctx.stroke();
+            }
+
+            document.querySelectorAll('.summary-mini-trend').forEach(drawMiniTrend);
+
+            if (document.getElementById('summaryMarketCapChart') && marketCapLabels.length > 0) {
+                new Chart(document.getElementById('summaryMarketCapChart'), {
+                    type: 'line',
+                    data: {
+                        labels: marketCapLabels,
+                        datasets: [
+                            {
+                                label: 'Invested',
+                                data: marketCapInvested,
+                                borderColor: '#58a6ff',
+                                backgroundColor: 'rgba(88,166,255,0.10)',
+                                fill: false,
+                                tension: 0.2,
+                                pointRadius: 1.8,
+                                spanGaps: true
+                            },
+                            {
+                                label: 'Current',
+                                data: marketCapCurrent,
+                                borderColor: '#3fb950',
+                                backgroundColor: 'rgba(63,185,80,0.10)',
+                                fill: false,
+                                tension: 0.2,
+                                pointRadius: 1.8,
+                                spanGaps: true
+                            },
+                            {
+                                label: 'Return %',
+                                data: marketCapPercent,
+                                borderColor: '#f2cc60',
+                                backgroundColor: 'rgba(242,204,96,0.08)',
+                                fill: false,
+                                tension: 0.2,
+                                yAxisID: 'y1',
+                                pointRadius: 1.2,
+                                borderDash: [5, 4],
+                                spanGaps: true
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: { mode: 'index', intersect: false },
+                        plugins: {
+                            legend: { labels: { color: '#c9d1d9' } }
+                        },
+                        scales: {
+                            x: { ticks: { color: '#8b949e' } },
+                            y: { ticks: { color: '#8b949e' } },
+                            y1: {
+                                position: 'right',
+                                grid: { drawOnChartArea: false },
+                                ticks: {
+                                    color: '#d9bf6a',
+                                    callback: function (v) { return v + '%'; }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            if (document.getElementById('summaryProfitHistoryChart') && profitHistoryLabels.length > 0) {
+                new Chart(document.getElementById('summaryProfitHistoryChart'), {
+                    type: 'bar',
+                    data: {
+                        labels: profitHistoryLabels,
+                        datasets: [{
+                            label: 'Profit History',
+                            data: profitHistoryValues,
+                            borderColor: '#3fb950',
+                            backgroundColor: profitHistoryValues.map(v => (Number(v || 0) >= 0 ? 'rgba(63,185,80,0.35)' : 'rgba(248,81,73,0.35)')),
+                            borderWidth: 1.1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { labels: { color: '#c9d1d9' } }
+                        },
+                        scales: {
+                            x: { ticks: { color: '#8b949e' } },
+                            y: { ticks: { color: '#8b949e' } }
+                        }
+                    }
+                });
+            }
+
+            $('#summaryPortfolioTable').DataTable({
+                responsive: true,
+                autoWidth: false,
+                fixedHeader: true,
+                stateSave: true,
+                pageLength: 15,
+                order: [[3, 'desc']]
+            });
+            $('#summaryAccountTable').DataTable({
+                responsive: true,
+                autoWidth: false,
+                fixedHeader: true,
+                stateSave: true,
+                pageLength: 15,
+                order: [[3, 'desc']]
+            });
+
+            $(document).on('click', '.summary-drill-link', function (e) {
+                e.preventDefault();
+                const $row = $(this).closest('tr');
+                const type = ($row.data('drill-type') || '').toString();
+                const name = ($row.data('drill-name') || '').toString();
+                if (!type || !name) {
+                    return;
+                }
+
+                const matched = details.filter(function (d) {
+                    if (type === 'portfolio') {
+                        return (d.portfolio || '').toLowerCase() === name.toLowerCase();
+                    }
+                    return (d.account || '').toLowerCase() === name.toLowerCase();
+                });
+
+                $('#summaryDrillTitle').text(name + ' Holdings Breakdown');
+                const $tbody = $('#summaryDrillTable tbody').empty();
+                matched.forEach(function (d) {
+                    $tbody.append(
+                        '<tr>' +
+                        '<td>' + (d.portfolio || '') + '</td>' +
+                        '<td>' + (d.account || '') + '</td>' +
+                        '<td>' + (d.name || '') + '</td>' +
+                        '<td>' + (d.symbol || '') + '</td>' +
+                        '<td>' + (d.date || '') + '</td>' +
+                        '<td class="text-end ' + metricClass(-Number(d.daysSinceBuy || 0)) + '">' + Number(d.daysSinceBuy || 0) + '</td>' +
+                        '<td class="text-end">' + Number(d.quantity || 0).toFixed(4) + '</td>' +
+                        '<td class="text-end">' + Number(d.buyPrice || 0).toFixed(2) + '</td>' +
+                        '<td class="text-end">' + Number(d.currentPrice || 0).toFixed(2) + '</td>' +
+                        '<td class="text-end">' + Number(d.totalCost || 0).toFixed(2) + '</td>' +
+                        '<td class="text-end">' + Number(d.currentValue || 0).toFixed(2) + '</td>' +
+                        '<td class="text-end ' + metricClass(d.dividends) + '">' + Number(d.dividends || 0).toFixed(2) + '</td>' +
+                        '<td class="text-end ' + metricClass(d.unrealisedPnL) + '">' + Number(d.unrealisedPnL || 0).toFixed(2) + '</td>' +
+                        '<td class="text-end ' + metricClass(d.dailyChange) + '">' + Number(d.dailyChange || 0).toFixed(2) + '</td>' +
+                        '</tr>'
+                    );
+                });
+
+                if (drillTable && $.fn.dataTable.isDataTable('#summaryDrillTable')) {
+                    drillTable.clear().destroy();
+                }
+                drillTable = $('#summaryDrillTable').DataTable({
+                    responsive: true,
+                    autoWidth: false,
+                    pageLength: 10,
+                    order: [[4, 'desc']]
+                });
+                drillModal.show();
+            });
+        });
+    </script>
+}

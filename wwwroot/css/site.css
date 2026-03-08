@@ -480,6 +480,15 @@ table.dataTable.dtr-inline.collapsed > tbody > tr > th.dtr-control {
 /* DataTables Styling */
 .dataTables_wrapper {
     color: var(--text-primary);
+    font-size: 10pt;
+}
+
+.table.dataTable {
+    font-size: 10pt;
+}
+
+.table.dataTable thead th {
+    font-size: 8.5pt;
 }
 
 /* Add breathing room for DataTables top/bottom control bars */
@@ -566,7 +575,7 @@ table.dataTable.dtr-inline.collapsed > tbody > tr > th.dtr-control {
 .dataTables_filter,
 .dataTables_info {
     color: var(--text-secondary);
-    font-size: 0.875rem;
+    font-size: 10pt;
 }
 
 .dataTables_paginate .paginate_button {
@@ -818,6 +827,10 @@ footer a:hover {
     color: var(--text-primary);
 }
 
+.portfolio-modal .modal-dialog {
+    width: auto;
+}
+
 .portfolio-modal .modal-header {
     border-bottom: 1px solid var(--border-color);
     background-color: var(--tertiary-dark);
@@ -829,6 +842,65 @@ footer a:hover {
 
 .portfolio-modal .table-host {
     overflow-x: auto;
+}
+
+.summary-sticky-stack {
+    background: linear-gradient(180deg, rgba(13, 17, 23, 0.98), rgba(13, 17, 23, 0.92));
+    border-bottom: 1px solid rgba(48, 54, 61, 0.6);
+    backdrop-filter: blur(2px);
+}
+
+.summary-status-strip .badge {
+    font-weight: 600;
+}
+
+.summary-badge-info {
+    background-color: rgba(56, 139, 253, 0.25) !important;
+    color: #9ecbff !important;
+}
+
+.summary-badge-warning {
+    background-color: rgba(255, 166, 0, 0.24) !important;
+    color: #ffd27a !important;
+}
+
+.summary-badge-danger {
+    background-color: rgba(248, 81, 73, 0.24) !important;
+    color: #ffb4ad !important;
+}
+
+.summary-drill-link {
+    color: var(--text-primary);
+    text-decoration: none;
+    border-bottom: 1px dashed rgba(88, 166, 255, 0.45);
+}
+
+.summary-drill-link:hover {
+    color: var(--accent-primary);
+}
+
+.summary-trend-wrap {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+}
+
+.summary-mini-trend {
+    display: block;
+    border: 1px solid rgba(48, 54, 61, 0.6);
+    border-radius: 6px;
+    background: rgba(22, 27, 34, 0.85);
+}
+
+.summary-chart-wrap {
+    position: relative;
+    height: 320px;
+    min-height: 320px;
+}
+
+.summary-chart-wrap canvas {
+    width: 100% !important;
+    height: 100% !important;
 }
 
 .charge-donut-card {
@@ -930,5 +1002,59 @@ footer a:hover {
         max-width: 56%;
         overflow: hidden;
         text-overflow: ellipsis;
+    }
+
+    .summary-dashboard-compact {
+        gap: 0.5rem;
+    }
+
+    .summary-dashboard-compact .summary-item {
+        flex: 1 1 calc(50% - 0.25rem);
+    }
+
+    .summary-dashboard-compact .stat-card {
+        padding: 0.75rem;
+    }
+
+    .summary-dashboard-compact .stat-label {
+        font-size: 0.72rem;
+    }
+
+    .summary-dashboard-compact .stat-value {
+        font-size: 1.05rem;
+        margin: 0.35rem 0;
+    }
+
+    .summary-dashboard-compact .stat-meta {
+        font-size: 0.72rem;
+    }
+
+    .summary-chart-wrap {
+        height: 240px;
+        min-height: 240px;
+    }
+}
+
+@media (min-width: 992px) {
+    .dashboard-container {
+        width: 90%;
+        max-width: none;
+    }
+
+    .portfolio-modal .modal-dialog {
+        width: 90vw;
+        max-width: 90vw;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .dashboard-container {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .portfolio-modal .modal-dialog {
+        width: auto;
+        max-width: calc(100% - 1rem);
     }
 }
