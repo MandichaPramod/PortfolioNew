@@ -159,6 +159,15 @@
                 <option value="asc">Low to High</option>
             </select>
         </div>
+        <div class="toolbar-group" id="usCurrencyGroup">
+            <span class="toolbar-label">US Values</span>
+            <div class="btn-group btn-group-sm" role="group" aria-label="US Currency">
+                <input type="radio" class="btn-check" name="usCurrencyMode" id="usCurrencyInr" value="inr" checked>
+                <label class="btn btn-outline-light" for="usCurrencyInr">INR</label>
+                <input type="radio" class="btn-check" name="usCurrencyMode" id="usCurrencyUsd" value="usd">
+                <label class="btn btn-outline-light" for="usCurrencyUsd">USD</label>
+            </div>
+        </div>
         <div class="toolbar-group" id="quickFilterGroup">
             <span class="toolbar-label">Quick Filters</span>
             <button class="btn btn-sm btn-outline-info active" data-quick-filter="all" type="button">All</button>
@@ -357,11 +366,14 @@
     <!-- Individual Portfolio Tabs -->
     @foreach (var portfolio in Model.AllLists.Where(p => p.Key != "Consolidated"))
     {
+        var isUsPortfolio = string.Equals(portfolio.Key, "US Stocks", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(portfolio.Key, "US Free Stocks", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(portfolio.Key, "US ETF", StringComparison.OrdinalIgnoreCase);
         <div class="tab-pane fade" id="@portfolio.Key.Replace(" ", "")" role="tabpanel">
             <div class="modern-card mb-4">
                 <div class="card-body p-0">
                     <div class="table-host">
-                        <table class="table table-hover dt-responsive portfolio-table" id="table-@portfolio.Key.Replace(" ", "")">
+                        <table class="table table-hover dt-responsive portfolio-table" id="table-@portfolio.Key.Replace(" ", "")" data-us-table="@(isUsPortfolio ? "1" : "0")">
                             <thead>
                                 <tr>
                                     <th>Name</th>
@@ -422,15 +434,15 @@
                                         <td class="text-end">
                                             <a href="#" class="text-decoration-none" data-bs-toggle="modal" data-bs-target="#@modalId">@Math.Round(item.Quantity, 4)</a>
                                         </td>
-                                        <td class="text-end">@Math.Round(item.BuyPrice, 2)</td>
-                                        <td class="text-end">@Math.Round(item.CurrentPrice, 2)</td>
-                                        <td class="text-end @(item.Dividend > item.CurrentPrice ? "dividend-highlight" : "")">@Math.Round(item.Dividend, 2)</td>
-                                        <td class="text-end">@Math.Round(item.TotalCost, 2)</td>
-                                        <td class="text-end">@Math.Round(item.CurrentValue, 2)</td>
-                                        <td class="text-end @(item.PnL > 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(item.PnL, 2)</td>
+                                        <td class="text-end @(isUsPortfolio ? "currency-cell" : "")" data-base-value="@(isUsPortfolio ? item.BuyPrice.ToString(System.Globalization.CultureInfo.InvariantCulture) : "")">@Math.Round(item.BuyPrice, 2)</td>
+                                        <td class="text-end @(isUsPortfolio ? "currency-cell" : "")" data-base-value="@(isUsPortfolio ? item.CurrentPrice.ToString(System.Globalization.CultureInfo.InvariantCulture) : "")">@Math.Round(item.CurrentPrice, 2)</td>
+                                        <td class="text-end @(item.Dividend > item.CurrentPrice ? "dividend-highlight" : "") @(isUsPortfolio ? "currency-cell" : "")" data-base-value="@(isUsPortfolio ? item.Dividend.ToString(System.Globalization.CultureInfo.InvariantCulture) : "")">@Math.Round(item.Dividend, 2)</td>
+                                        <td class="text-end @(isUsPortfolio ? "currency-cell" : "")" data-base-value="@(isUsPortfolio ? item.TotalCost.ToString(System.Globalization.CultureInfo.InvariantCulture) : "")">@Math.Round(item.TotalCost, 2)</td>
+                                        <td class="text-end @(isUsPortfolio ? "currency-cell" : "")" data-base-value="@(isUsPortfolio ? item.CurrentValue.ToString(System.Globalization.CultureInfo.InvariantCulture) : "")">@Math.Round(item.CurrentValue, 2)</td>
+                                        <td class="text-end @(item.PnL > 0 ? "metric-positive" : "metric-negative") fw-bold @(isUsPortfolio ? "currency-cell" : "")" data-base-value="@(isUsPortfolio ? item.PnL.ToString(System.Globalization.CultureInfo.InvariantCulture) : "")">@Math.Round(item.PnL, 2)</td>
                                         <td class="text-end @(item.PnL > 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(pnlPct, 2)%</td>
                                         <td>
-                                            <div class="investment-summary">
+                                            <div class="investment-summary @(isUsPortfolio ? "currency-summary" : "")" data-mtd="@(isUsPortfolio ? monthTotal.ToString(System.Globalization.CultureInfo.InvariantCulture) : "")" data-last90="@(isUsPortfolio ? last90Total.ToString(System.Globalization.CultureInfo.InvariantCulture) : "")" data-ytd="@(isUsPortfolio ? yearTotal.ToString(System.Globalization.CultureInfo.InvariantCulture) : "")">
                                                 MTD @Math.Round(monthTotal, 0).ToString("N0") | 90D @Math.Round(last90Total, 0).ToString("N0") | YTD @Math.Round(yearTotal, 0).ToString("N0")
                                             </div>
                                         </td>
@@ -463,7 +475,7 @@
                         </div>
                         <div class="modal-body p-0">
                             <div class="table-host">
-                                <table class="table table-hover mb-0 modal-breakdown-table">
+                                <table class="table table-hover mb-0 modal-breakdown-table" data-us-modal="@(isUsPortfolio ? "1" : "0")">
                                     <thead>
                                         <tr>
                                             <th class="text-end">Qty</th>
@@ -501,11 +513,11 @@
                                             <tr>
                                                 <td class="text-end">@Math.Round(trade.Quantity, 4)</td>
                                                 <td>@trade.Date</td>
-                                                <td class="text-end">@Math.Round(trade.BuyPrice, 2)</td>
-                                                <td class="text-end @(trade.Dividend > trade.CurrentPrice ? "dividend-highlight" : "")">@Math.Round(trade.Dividend, 2)</td>
-                                                <td class="text-end">@Math.Round(trade.TotalCost, 2)</td>
-                                                <td class="text-end">@Math.Round(trade.CurrentValue, 2)</td>
-                                                <td class="text-end @(tradePnl > 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(tradePnl, 2)</td>
+                                                <td class="text-end @(isUsPortfolio ? "currency-cell" : "")" data-base-value="@(isUsPortfolio ? trade.BuyPrice.ToString(System.Globalization.CultureInfo.InvariantCulture) : "")">@Math.Round(trade.BuyPrice, 2)</td>
+                                                <td class="text-end @(trade.Dividend > trade.CurrentPrice ? "dividend-highlight" : "") @(isUsPortfolio ? "currency-cell" : "")" data-base-value="@(isUsPortfolio ? trade.Dividend.ToString(System.Globalization.CultureInfo.InvariantCulture) : "")">@Math.Round(trade.Dividend, 2)</td>
+                                                <td class="text-end @(isUsPortfolio ? "currency-cell" : "")" data-base-value="@(isUsPortfolio ? trade.TotalCost.ToString(System.Globalization.CultureInfo.InvariantCulture) : "")">@Math.Round(trade.TotalCost, 2)</td>
+                                                <td class="text-end @(isUsPortfolio ? "currency-cell" : "")" data-base-value="@(isUsPortfolio ? trade.CurrentValue.ToString(System.Globalization.CultureInfo.InvariantCulture) : "")">@Math.Round(trade.CurrentValue, 2)</td>
+                                                <td class="text-end @(tradePnl > 0 ? "metric-positive" : "metric-negative") fw-bold @(isUsPortfolio ? "currency-cell" : "")" data-base-value="@(isUsPortfolio ? tradePnl.ToString(System.Globalization.CultureInfo.InvariantCulture) : "")">@Math.Round(tradePnl, 2)</td>
                                                 <td class="text-end @(tradePnl > 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(tradePnlPct, 2)%</td>
                                                 <td class="text-end">@cagrText</td>
                                                 <td>@trade.Ageing</td>
@@ -533,6 +545,8 @@
             var summaryByTab = @Html.Raw(summaryByTabJson);
             var activeQuickFilter = "all";
             var activeViewMode = "performance";
+            var usdInrRate = Number('@((ViewBag.UsdInrRate != null ? ((double)ViewBag.UsdInrRate) : 83.0).ToString(System.Globalization.CultureInfo.InvariantCulture))');
+            var usTabKeys = ['US Stocks', 'US Free Stocks', 'US ETF'];
 
             function getActiveTableId() {
                 var activePane = document.querySelector('#portfolioTabContent .tab-pane.active.show') || document.querySelector('#portfolioTabContent .tab-pane.active');
@@ -703,6 +717,50 @@
                 return sign + n.toFixed(2) + "%";
             }
 
+            function isUsTabKey(tabKey) {
+                return usTabKeys.indexOf((tabKey || '').toString()) >= 0;
+            }
+
+            function formatCurrencyValue(value, mode) {
+                var n = Number(value || 0);
+                if (isNaN(n)) {
+                    n = 0;
+                }
+                var display = mode === 'usd' ? (n / (usdInrRate > 0 ? usdInrRate : 83)) : n;
+                var symbol = mode === 'usd' ? '$' : '\u20B9';
+                return symbol + display.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
+
+            function applyCurrencyToContainer($container, mode) {
+                $container.find('.currency-cell').each(function () {
+                    var raw = Number($(this).attr('data-base-value'));
+                    if (isNaN(raw)) {
+                        return;
+                    }
+                    $(this).text(formatCurrencyValue(raw, mode));
+                });
+
+                $container.find('.currency-summary').each(function () {
+                    var mtd = Number($(this).attr('data-mtd'));
+                    var last90 = Number($(this).attr('data-last90'));
+                    var ytd = Number($(this).attr('data-ytd'));
+                    if (isNaN(mtd) || isNaN(last90) || isNaN(ytd)) {
+                        return;
+                    }
+                    $(this).text('MTD ' + formatCurrencyValue(mtd, mode) + ' | 90D ' + formatCurrencyValue(last90, mode) + ' | YTD ' + formatCurrencyValue(ytd, mode));
+                });
+            }
+
+            function applyUsCurrencyForActiveTab() {
+                var mode = $('input[name="usCurrencyMode"]:checked').val() || 'inr';
+                var tabKey = getActiveTabKey();
+                if (!isUsTabKey(tabKey)) {
+                    return;
+                }
+                var paneId = '#' + tabKey.replace(/\s+/g, '');
+                applyCurrencyToContainer($(paneId), mode);
+            }
+
             function updateSummaryForTab(tabKey) {
                 var s = summaryByTab[tabKey];
                 if (!s) {
@@ -797,6 +855,7 @@
             $(window).on('resize', function () {
                 updateStickyOffsets();
                 applyViewMode(activeViewMode);
+                applyUsCurrencyForActiveTab();
             });
             $('button[data-bs-toggle="tab"]').on('shown.bs.tab', function () {
                 var tabKey = $(this).data('tab-key');
@@ -811,6 +870,7 @@
                 });
                 applyViewMode(activeViewMode);
                 updateStickyOffsets();
+                applyUsCurrencyForActiveTab();
             });
 
             $('#portfolioTabs .nav-link').on('mouseenter', function () {
@@ -835,6 +895,16 @@
             });
             $('#mobileSortDirection').on('change', function () {
                 applyViewMode(activeViewMode);
+            });
+
+            $('input[name="usCurrencyMode"]').on('change', function () {
+                applyUsCurrencyForActiveTab();
+                $('.portfolio-modal.show').each(function () {
+                    var $table = $(this).find('table[data-us-modal="1"]');
+                    if ($table.length > 0) {
+                        applyCurrencyToContainer($(this), $('input[name="usCurrencyMode"]:checked').val() || 'inr');
+                    }
+                });
             });
 
             $('#quickFilterGroup [data-quick-filter]').on('click', function () {
@@ -869,6 +939,9 @@
             $('.portfolio-modal').on('shown.bs.modal', function () {
                 var $table = $(this).find('table.modal-breakdown-table');
                 if ($table.length === 0 || $.fn.dataTable.isDataTable($table[0])) {
+                    if ($(this).find('table[data-us-modal="1"]').length > 0) {
+                        applyCurrencyToContainer($(this), $('input[name="usCurrencyMode"]:checked').val() || 'inr');
+                    }
                     return;
                 }
 
@@ -885,7 +958,13 @@
                     order: [],
                     columnDefs: []
                 });
+
+                if ($(this).find('table[data-us-modal="1"]').length > 0) {
+                    applyCurrencyToContainer($(this), $('input[name="usCurrencyMode"]:checked').val() || 'inr');
+                }
             });
+
+            applyUsCurrencyForActiveTab();
         });
     </script>
 }

@@ -201,6 +201,25 @@ namespace PortfolioNew.Controllers
                         });
                     }
                 }
+
+                // Derive USD/INR from Breakdown US rows:
+                // TotalCost ~= Quantity * BuyPrice * USD_INR
+                var usPortfolios = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    "US Stocks",
+                    "US Free Stocks",
+                    "US ETF"
+                };
+                var fxCandidates = portfolios
+                    .Where(p => usPortfolios.Contains(p.Portfolio)
+                        && p.Quantity > 0
+                        && p.BuyPrice > 0
+                        && p.TotalCost > 0)
+                    .Select(p => p.TotalCost / (p.Quantity * p.BuyPrice))
+                    .Where(r => r > 40 && r < 120)
+                    .ToList();
+                var derivedUsdInrRate = fxCandidates.Count > 0 ? fxCandidates.Average() : 83.0;
+
                 var allLists = new Dictionary<string, List<BreakDownRow>>();
 
                 // Consolidated: group by symbol across all portfolios/accounts.
@@ -248,6 +267,8 @@ namespace PortfolioNew.Controllers
 
                     allLists[portfolioGroup.Key] = groupedPortfolioList;
                 }
+
+                ViewBag.UsdInrRate = Math.Round(derivedUsdInrRate, 4);
 
                 return View(new PortfolioResponseModel
                 {
