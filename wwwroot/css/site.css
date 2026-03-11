@@ -267,7 +267,13 @@ body {
 
 .table-host {
     width: 100%;
-    overflow: visible;
+    overflow-x: auto;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+}
+
+.table-host .table.dataTable {
+    min-width: 1150px;
 }
 
 /* Tables */
@@ -741,7 +747,7 @@ footer a:hover {
     }
 
     .table-host {
-        overflow-x: hidden;
+        overflow-x: auto;
     }
 
     .insight-strip {
