@@ -12,6 +12,7 @@
     --accent-danger: #f85149;
     --navbar-offset: 72px;
     --sticky-stack-height: 0px;
+    --summary-strip-height: 0px;
 }
 
 body {
@@ -238,6 +239,10 @@ body {
     padding-bottom: 0.5rem;
 }
 
+.summary-sticky-strip {
+    position: static;
+}
+
 /* Modern Card */
 .modern-card {
     background-color: var(--secondary-dark);
@@ -364,6 +369,14 @@ body {
 .holding-name {
     font-weight: 500;
     color: var(--text-primary);
+}
+
+.holding-symbol {
+    display: block;
+}
+
+.mobile-holding-summary {
+    display: none;
 }
 
 /* Ensure name/symbol remain readable inside DataTables */
@@ -770,6 +783,75 @@ footer a:hover {
         top: auto;
     }
 
+    .holding-name,
+    .sparkline-wrap,
+    .holding-age,
+    .weight-summary {
+        display: none !important;
+    }
+
+    .holding-symbol {
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: #cfe5ff !important;
+        letter-spacing: 0.2px;
+        margin-bottom: 0.5rem;
+    }
+
+    .mobile-holding-summary {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.45rem;
+        margin-top: 0.2rem;
+    }
+
+    .mobile-metric {
+        display: flex;
+        flex-direction: column;
+        gap: 0.12rem;
+        padding: 0.45rem 0.55rem;
+        border-radius: 10px;
+        border: 1px solid rgba(88, 166, 255, 0.14);
+        background: linear-gradient(145deg, rgba(33, 38, 45, 0.96), rgba(18, 24, 32, 0.94));
+    }
+
+    .mobile-metric span {
+        font-size: 0.64rem;
+        text-transform: uppercase;
+        letter-spacing: 0.28px;
+        color: var(--text-secondary);
+        line-height: 1.1;
+    }
+
+    .mobile-metric strong {
+        font-size: 0.8rem;
+        color: var(--text-primary);
+        font-weight: 700;
+        line-height: 1.2;
+    }
+
+    .mobile-metric-positive {
+        border-color: rgba(63, 185, 80, 0.32);
+        background: linear-gradient(145deg, rgba(20, 51, 35, 0.95), rgba(15, 28, 20, 0.96));
+    }
+
+    .mobile-metric-positive strong {
+        color: #7ee787;
+    }
+
+    .mobile-metric-negative {
+        border-color: rgba(248, 81, 73, 0.32);
+        background: linear-gradient(145deg, rgba(57, 23, 23, 0.95), rgba(30, 17, 18, 0.96));
+    }
+
+    .mobile-metric-negative strong {
+        color: #ffb3b3;
+    }
+
+    .table.dataTable tbody td:first-child {
+        min-width: 290px;
+    }
+
 }
 
 /* Animations */
@@ -1042,6 +1124,62 @@ footer a:hover {
 }
 
 @media (min-width: 992px) {
+    .summary-sticky-strip {
+        position: sticky;
+        top: var(--navbar-offset);
+        z-index: 1041;
+        background: linear-gradient(180deg, rgba(13, 17, 23, 0.98), rgba(13, 17, 23, 0.92));
+        padding-bottom: 0.35rem;
+        transition: padding 0.18s ease, transform 0.18s ease;
+    }
+
+    .home-summary-dashboard {
+        transition: gap 0.18s ease;
+    }
+
+    .summary-sticky-strip .stat-card {
+        transition: padding 0.18s ease, border-radius 0.18s ease;
+    }
+
+    .summary-sticky-strip .stat-label,
+    .summary-sticky-strip .stat-value,
+    .summary-sticky-strip .stat-meta {
+        transition: font-size 0.18s ease, margin 0.18s ease, opacity 0.18s ease;
+    }
+
+    .summary-sticky-strip.is-compact {
+        padding-bottom: 0.1rem;
+    }
+
+    .summary-sticky-strip.is-compact .home-summary-dashboard {
+        gap: 0.55rem;
+    }
+
+    .summary-sticky-strip.is-compact .stat-card {
+        padding: 0.45rem 0.7rem;
+        border-radius: 10px;
+    }
+
+    .summary-sticky-strip.is-compact .stat-label {
+        font-size: 0.67rem;
+        margin-bottom: 0.15rem;
+    }
+
+    .summary-sticky-strip.is-compact .stat-value {
+        font-size: 1rem;
+        margin: 0.1rem 0;
+        white-space: nowrap;
+    }
+
+    .summary-sticky-strip.is-compact .stat-meta {
+        font-size: 0.68rem;
+        opacity: 0.9;
+    }
+
+    .sticky-stack {
+        top: calc(var(--navbar-offset) + var(--summary-strip-height));
+    }
+
     .dashboard-container {
         width: 90%;
         max-width: none;

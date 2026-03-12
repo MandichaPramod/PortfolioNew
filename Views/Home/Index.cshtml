@@ -75,9 +75,9 @@
             @TempData["CacheStatus"]
         </div>
     }
-    <div id="stickyStack" class="sticky-stack">
     <!-- Summary Dashboard -->
-    <div class="summary-dashboard mb-3">
+    <div id="summaryStickyStrip" class="summary-sticky-strip mb-3">
+    <div class="summary-dashboard home-summary-dashboard">
         <div class="summary-item" data-summary-card="invested">
             <div class="stat-card">
                 <div class="stat-label">Total Invested</div>
@@ -113,6 +113,7 @@
                 <div class="stat-meta" id="summary-change-meta">@(consolidatedChange > 0 ? "+" : "")@Math.Round((((consolidatedCurrentValue - consolidatedChange) > 0 ? (100 * consolidatedChange / (consolidatedCurrentValue - consolidatedChange)) : 0)), 2)%</div>
             </div>
         </div>
+    </div>
     </div>
 
     <div class="insight-toggle-wrap mb-2">
@@ -184,6 +185,7 @@
         </div>
     </div>
 
+    <div id="stickyStack" class="sticky-stack">
     <!-- Portfolio Tabs -->
     <ul class="nav nav-tabs" id="portfolioTabs" role="tablist">
         <li class="nav-item" role="presentation">
@@ -203,7 +205,7 @@
             <div class="modern-card mb-4">
                 <div class="card-body p-0">
                     <div class="table-host">
-                        <table class="table table-hover dt-responsive" id="consolidatedTable">
+                        <table class="table table-hover dt-responsive home-data-table" id="consolidatedTable">
                             <thead>
                                 <tr>
                                     <th>Name</th>
@@ -249,17 +251,26 @@
                                     var weightValuePct = consolidatedCurrentValue > 0 ? (item.CurrentValue * 100 / consolidatedCurrentValue) : 0;
                                     var weightPnlPct = consolidatedPnL != 0 ? (item.PnL * 100 / consolidatedPnL) : 0;
                                     var weightChangePct = consolidatedChange != 0 ? (item.Change * 100 / consolidatedChange) : 0;
+                                    var changePct = (item.CurrentValue - item.Change) > 0 ? (100 * item.Change / (item.CurrentValue - item.Change)) : 0;
                                     <tr data-pnl="@item.PnL" data-dividend-yield="@dividendYieldPct" data-days-last-buy="@(daysSinceLastBuy ?? 99999)">
                                         <td>
                                             <div class="holding-name">
                                                 @item.Name
                                             </div>
-                                            <small class="text-muted">@item.Symbol</small>
+                                            <small class="text-muted holding-symbol">@item.Symbol</small>
                                             <div class="sparkline-wrap"><div class="sparkline @(item.PnL >= 0 ? "sparkline-positive" : "sparkline-negative")" style="width:@Math.Min(Math.Abs(pnlPct), 100)%"></div></div>
+                                            <div class="mobile-holding-summary">
+                                                <div class="mobile-metric"><span>Qty</span><strong>@Math.Round(item.Quantity, 4)</strong></div>
+                                                <div class="mobile-metric"><span>Buy</span><strong>@Math.Round(item.BuyPrice, 2)</strong></div>
+                                                <div class="mobile-metric"><span>Current</span><strong>@Math.Round(item.CurrentPrice, 2)</strong></div>
+                                                <div class="mobile-metric"><span>Dividend</span><strong>@Math.Round(item.Dividend, 2)</strong></div>
+                                                <div class="mobile-metric @(item.PnL >= 0 ? "mobile-metric-positive" : "mobile-metric-negative")"><span>P&amp;L</span><strong>@Math.Round(item.PnL, 2) (@Math.Round(pnlPct, 2)%)</strong></div>
+                                                <div class="mobile-metric @(item.Change >= 0 ? "mobile-metric-positive" : "mobile-metric-negative")"><span>Change</span><strong>@Math.Round(item.Change, 2) (@Math.Round(changePct, 2)%)</strong></div>
+                                            </div>
                                             @if (daysSinceLastBuy.HasValue)
                                             {
                                                 var ageBadge = GetAgeBadge(daysSinceLastBuy.Value);
-                                                <div class="mt-1">
+                                                <div class="mt-1 holding-age">
                                                     <span class="badge me-1" style="@ageBadge.Style">Last Buy @lastBuy?.ToString("dd MMM yyyy")</span>
                                                     <span class="badge" style="@ageBadge.Style">@daysSinceLastBuy days (@ageBadge.Text)</span>
                                                 </div>
@@ -276,7 +287,7 @@
                                         <td class="text-end @(item.PnL > 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(item.PnL, 2)</td>
                                         <td class="text-end @(item.PnL > 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(pnlPct, 2)%</td>
                                         <td class="text-end @(item.Change > 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(item.Change, 2)</td>
-                                        <td class="text-end @(item.Change > 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round((item.CurrentValue - item.Change) > 0 ? (100 * item.Change / (item.CurrentValue - item.Change)) : 0, 2)%</td>
+                                        <td class="text-end @(item.Change > 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(changePct, 2)%</td>
                                         <td class="text-end @(item.RealisedPnL > 0 ? "metric-positive" : "metric-negative") fw-bold">@Math.Round(item.RealisedPnL, 2)</td>
                                         <td>
                                             <div class="investment-summary">
@@ -373,7 +384,7 @@
             <div class="modern-card mb-4">
                 <div class="card-body p-0">
                     <div class="table-host">
-                        <table class="table table-hover dt-responsive portfolio-table" id="table-@portfolio.Key.Replace(" ", "")" data-us-table="@(isUsPortfolio ? "1" : "0")">
+                        <table class="table table-hover dt-responsive portfolio-table home-data-table" id="table-@portfolio.Key.Replace(" ", "")" data-us-table="@(isUsPortfolio ? "1" : "0")">
                             <thead>
                                 <tr>
                                     <th>Name</th>
@@ -417,15 +428,24 @@
                                     var daysSinceLastBuy = lastBuy.HasValue ? (DateTime.Now.Date - lastBuy.Value.Date).Days : (int?)null;
                                     var pnlPct = item.TotalCost > 0 ? (item.PnL * 100 / item.TotalCost) : 0;
                                     var dividendYieldPct = item.TotalCost > 0 ? (item.Dividend * 100 / item.TotalCost) : 0;
+                                    var changePct = (item.CurrentValue - item.Change) > 0 ? (100 * item.Change / (item.CurrentValue - item.Change)) : 0;
                                     <tr data-pnl="@item.PnL" data-dividend-yield="@dividendYieldPct" data-days-last-buy="@(daysSinceLastBuy ?? 99999)">
                                         <td>
                                             <div class="holding-name">@item.Name</div>
-                                            <small class="text-muted">@item.Symbol</small>
+                                            <small class="text-muted holding-symbol">@item.Symbol</small>
                                             <div class="sparkline-wrap"><div class="sparkline @(item.PnL >= 0 ? "sparkline-positive" : "sparkline-negative")" style="width:@Math.Min(Math.Abs(pnlPct), 100)%"></div></div>
+                                            <div class="mobile-holding-summary">
+                                                <div class="mobile-metric"><span>Qty</span><strong>@Math.Round(item.Quantity, 4)</strong></div>
+                                                <div class="mobile-metric"><span>Buy</span><strong>@Math.Round(item.BuyPrice, 2)</strong></div>
+                                                <div class="mobile-metric"><span>Current</span><strong>@Math.Round(item.CurrentPrice, 2)</strong></div>
+                                                <div class="mobile-metric"><span>Dividend</span><strong>@Math.Round(item.Dividend, 2)</strong></div>
+                                                <div class="mobile-metric @(item.PnL >= 0 ? "mobile-metric-positive" : "mobile-metric-negative")"><span>P&amp;L</span><strong>@Math.Round(item.PnL, 2) (@Math.Round(pnlPct, 2)%)</strong></div>
+                                                <div class="mobile-metric @(item.Change >= 0 ? "mobile-metric-positive" : "mobile-metric-negative")"><span>Change</span><strong>@Math.Round(item.Change, 2) (@Math.Round(changePct, 2)%)</strong></div>
+                                            </div>
                                             @if (daysSinceLastBuy.HasValue)
                                             {
                                                 var ageBadge = GetAgeBadge(daysSinceLastBuy.Value);
-                                                <div class="mt-1">
+                                                <div class="mt-1 holding-age">
                                                     <span class="badge me-1" style="@ageBadge.Style">Last Buy @lastBuy?.ToString("dd MMM yyyy")</span>
                                                     <span class="badge" style="@ageBadge.Style">@daysSinceLastBuy days (@ageBadge.Text)</span>
                                                 </div>
@@ -795,12 +815,15 @@
                 var navbar = document.querySelector('.navbar');
                 var navbarHeight = navbar ? Math.ceil(navbar.getBoundingClientRect().height) : 0;
                 var stickyStack = document.getElementById('stickyStack');
+                var summaryStickyStrip = document.getElementById('summaryStickyStrip');
                 var stackHeight = stickyStack ? Math.ceil(stickyStack.getBoundingClientRect().height) : 0;
+                var summaryHeight = summaryStickyStrip ? Math.ceil(summaryStickyStrip.getBoundingClientRect().height) : 0;
                 var desktop = window.matchMedia('(min-width: 992px)').matches;
-                var headerOffset = desktop ? (navbarHeight + stackHeight) : navbarHeight;
+                var headerOffset = desktop ? (navbarHeight + stackHeight + summaryHeight) : navbarHeight;
 
                 document.documentElement.style.setProperty('--navbar-offset', navbarHeight + 'px');
                 document.documentElement.style.setProperty('--sticky-stack-height', stackHeight + 'px');
+                document.documentElement.style.setProperty('--summary-strip-height', (desktop ? summaryHeight : 0) + 'px');
 
                 dataTables.forEach(function(table) {
                     if (table.fixedHeader) {
@@ -823,7 +846,13 @@
                 pageLength: 15,
                 order: [[7, 'desc']], // Sort by P&L descending
                 columnDefs: [
-                    { targets: [1,2,3,4,5,6,7,8,9,10,11], className: "text-end" }
+                    { targets: [1,2,3,4,5,6,7,8,9,10,11], className: "text-end" },
+                    { targets: 0, responsivePriority: 1 },
+                    { targets: [1,2,3,4,7,8,9,10], responsivePriority: 100 },
+                    { targets: 5, responsivePriority: 101 },
+                    { targets: 6, responsivePriority: 102 },
+                    { targets: 11, responsivePriority: 103 },
+                    { targets: 12, responsivePriority: 104 }
                 ]
             });
             dataTables.push(consolidatedTable);
@@ -843,7 +872,13 @@
                     pageLength: 15,
                     order: [[7, 'desc']], // Sort by P&L descending
                     columnDefs: [
-                        { targets: [1,2,3,4,5,6,7,8,10], className: "text-end" }
+                        { targets: [1,2,3,4,5,6,7,8,10], className: "text-end" },
+                        { targets: 0, responsivePriority: 1 },
+                        { targets: [1,2,3,4,7,8], responsivePriority: 100 },
+                        { targets: 5, responsivePriority: 101 },
+                        { targets: 6, responsivePriority: 102 },
+                        { targets: 9, responsivePriority: 103 },
+                        { targets: 10, responsivePriority: 104 }
                     ]
                 });
                 dataTables.push(table);
@@ -856,6 +891,11 @@
                 updateStickyOffsets();
                 applyViewMode(activeViewMode);
                 applyUsCurrencyForActiveTab();
+            });
+            $(window).on('scroll', function () {
+                var desktop = window.matchMedia('(min-width: 992px)').matches;
+                $('#summaryStickyStrip').toggleClass('is-compact', desktop && window.scrollY > 80);
+                updateStickyOffsets();
             });
             $('button[data-bs-toggle="tab"]').on('shown.bs.tab', function () {
                 var tabKey = $(this).data('tab-key');
@@ -965,6 +1005,7 @@
             });
 
             applyUsCurrencyForActiveTab();
+            $(window).trigger('scroll');
         });
     </script>
 }
