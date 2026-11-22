@@ -169,6 +169,12 @@
                 <label class="btn btn-outline-light" for="usCurrencyUsd">USD</label>
             </div>
         </div>
+        <div class="toolbar-group">
+            <details class="column-picker" id="columnVisibilityControl">
+                <summary class="btn btn-sm btn-outline-secondary">Columns</summary>
+                <div class="column-picker-menu" id="columnVisibilityMenu" aria-label="Toggle table columns"></div>
+            </details>
+        </div>
         <div class="toolbar-group" id="quickFilterGroup">
             <span class="toolbar-label">Quick Filters</span>
             <button class="btn btn-sm btn-outline-info active" data-quick-filter="all" type="button">All</button>
@@ -255,9 +261,9 @@
                                     <tr data-pnl="@item.PnL" data-dividend-yield="@dividendYieldPct" data-days-last-buy="@(daysSinceLastBuy ?? 99999)">
                                         <td>
                                             <div class="holding-name">
-                                                @item.Name
+                                                <button type="button" class="holding-detail-link" data-bs-toggle="modal" data-bs-target="#@modalId">@item.Name</button>
                                             </div>
-                                            <small class="text-muted holding-symbol">@item.Symbol</small>
+                                            <button type="button" class="holding-detail-link holding-symbol" data-bs-toggle="modal" data-bs-target="#@modalId">@item.Symbol</button>
                                             <div class="sparkline-wrap"><div class="sparkline @(item.PnL >= 0 ? "sparkline-positive" : "sparkline-negative")" style="width:@Math.Min(Math.Abs(pnlPct), 100)%"></div></div>
                                             <div class="mobile-holding-summary">
                                                 <div class="mobile-metric"><span>Qty</span><strong>@Math.Round(item.Quantity, 4)</strong></div>
@@ -270,10 +276,11 @@
                                             @if (daysSinceLastBuy.HasValue)
                                             {
                                                 var ageBadge = GetAgeBadge(daysSinceLastBuy.Value);
-                                                <div class="mt-1 holding-age">
-                                                    <span class="badge me-1" style="@ageBadge.Style">Last Buy @lastBuy?.ToString("dd MMM yyyy")</span>
-                                                    <span class="badge" style="@ageBadge.Style">@daysSinceLastBuy days (@ageBadge.Text)</span>
-                                                </div>
+                                                var lastBuyText = lastBuy?.ToString("dd MMM yyyy") ?? "Unknown";
+                                                var ageTooltip = $"Last buy {lastBuyText} | {daysSinceLastBuy} days ({ageBadge.Text})";
+                                                <span class="holding-age-badge holding-age" style="@ageBadge.Style" title="@ageTooltip">
+                                                    @daysSinceLastBuy d | @lastBuy?.ToString("dd MMM yy")
+                                                </span>
                                             }
                                         </td>
                                         <td class="text-end">
@@ -431,8 +438,8 @@
                                     var changePct = (item.CurrentValue - item.Change) > 0 ? (100 * item.Change / (item.CurrentValue - item.Change)) : 0;
                                     <tr data-pnl="@item.PnL" data-dividend-yield="@dividendYieldPct" data-days-last-buy="@(daysSinceLastBuy ?? 99999)">
                                         <td>
-                                            <div class="holding-name">@item.Name</div>
-                                            <small class="text-muted holding-symbol">@item.Symbol</small>
+                                            <div class="holding-name"><button type="button" class="holding-detail-link" data-bs-toggle="modal" data-bs-target="#@modalId">@item.Name</button></div>
+                                            <button type="button" class="holding-detail-link holding-symbol" data-bs-toggle="modal" data-bs-target="#@modalId">@item.Symbol</button>
                                             <div class="sparkline-wrap"><div class="sparkline @(item.PnL >= 0 ? "sparkline-positive" : "sparkline-negative")" style="width:@Math.Min(Math.Abs(pnlPct), 100)%"></div></div>
                                             <div class="mobile-holding-summary">
                                                 <div class="mobile-metric"><span>Qty</span><strong>@Math.Round(item.Quantity, 4)</strong></div>
@@ -445,10 +452,11 @@
                                             @if (daysSinceLastBuy.HasValue)
                                             {
                                                 var ageBadge = GetAgeBadge(daysSinceLastBuy.Value);
-                                                <div class="mt-1 holding-age">
-                                                    <span class="badge me-1" style="@ageBadge.Style">Last Buy @lastBuy?.ToString("dd MMM yyyy")</span>
-                                                    <span class="badge" style="@ageBadge.Style">@daysSinceLastBuy days (@ageBadge.Text)</span>
-                                                </div>
+                                                var lastBuyText = lastBuy?.ToString("dd MMM yyyy") ?? "Unknown";
+                                                var ageTooltip = $"Last buy {lastBuyText} | {daysSinceLastBuy} days ({ageBadge.Text})";
+                                                <span class="holding-age-badge holding-age" style="@ageBadge.Style" title="@ageTooltip">
+                                                    @daysSinceLastBuy d | @lastBuy?.ToString("dd MMM yy")
+                                                </span>
                                             }
                                         </td>
                                         <td class="text-end">
@@ -811,6 +819,53 @@
                 var $activeTab = $('#portfolioTabs .nav-link.active');
                 return $activeTab.data('tab-key') || 'Consolidated';
             }
+
+            function getActiveDataTable() {
+                var tabIndex = $('#portfolioTabs .nav-link.active').closest('.nav-item').index();
+                if (tabIndex >= 0 && dataTables[tabIndex]) {
+                    return dataTables[tabIndex];
+                }
+
+                var target = $('#portfolioTabs .nav-link.active').attr('data-bs-target');
+                var tableNode = target ? $(target).find('table')[0] : null;
+                return tableNode && $.fn.dataTable.isDataTable(tableNode) ? $(tableNode).DataTable() : null;
+            }
+
+            function syncColumnPicker() {
+                var table = getActiveDataTable();
+                var $menu = $('#columnVisibilityMenu').empty();
+                if (!table) {
+                    $menu.append($('<span class="column-picker-empty"/>').text('No table is available for this tab.'));
+                    return;
+                }
+
+                table.columns().every(function (index) {
+                    if (index === 0) {
+                        return;
+                    }
+                    var column = this;
+                    var label = $('<label class="column-picker-option"/>');
+                    var checkbox = $('<input type="checkbox" class="form-check-input"/>')
+                        .prop('checked', column.visible())
+                        .on('change', function () {
+                            column.visible(this.checked);
+                            table.columns.adjust().responsive.recalc().draw(false);
+                        });
+                    var title = column.header().textContent.trim().replace(/\s+i\s*$/, '') || ('Column ' + (index + 1));
+                    checkbox.attr('aria-label', 'Show ' + title + ' column');
+                    label.append(checkbox, $('<span/>').text(title));
+                    $menu.append(label);
+                });
+            }
+
+            function updatePortfolioTabOverflow() {
+                var tabs = document.getElementById('portfolioTabs');
+                if (!tabs) return;
+                var maxScroll = tabs.scrollWidth - tabs.clientWidth;
+                tabs.classList.toggle('has-more-left', tabs.scrollLeft > 2);
+                tabs.classList.toggle('has-more-right', maxScroll - tabs.scrollLeft > 2);
+            }
+
             function updateStickyOffsets() {
                 var navbar = document.querySelector('.navbar');
                 var navbarHeight = navbar ? Math.ceil(navbar.getBoundingClientRect().height) : 0;
@@ -848,11 +903,7 @@
                 columnDefs: [
                     { targets: [1,2,3,4,5,6,7,8,9,10,11], className: "text-end" },
                     { targets: 0, responsivePriority: 1 },
-                    { targets: [1,2,3,4,7,8,9,10], responsivePriority: 100 },
-                    { targets: 5, responsivePriority: 101 },
-                    { targets: 6, responsivePriority: 102 },
-                    { targets: 11, responsivePriority: 103 },
-                    { targets: 12, responsivePriority: 104 }
+                    { targets: [1,2,3,4,7,8,9,10,5,6,11,12], responsivePriority: 200 }
                 ]
             });
             dataTables.push(consolidatedTable);
@@ -874,15 +925,16 @@
                     columnDefs: [
                         { targets: [1,2,3,4,5,6,7,8,10], className: "text-end" },
                         { targets: 0, responsivePriority: 1 },
-                        { targets: [1,2,3,4,7,8], responsivePriority: 100 },
-                        { targets: 5, responsivePriority: 101 },
-                        { targets: 6, responsivePriority: 102 },
-                        { targets: 9, responsivePriority: 103 },
-                        { targets: 10, responsivePriority: 104 }
+                        { targets: [1,2,3,4,7,8,5,6,9,10], responsivePriority: 200 }
                     ]
                 });
                 dataTables.push(table);
             });
+
+            $('#portfolioTabs').on('scroll', updatePortfolioTabOverflow);
+            $(window).on('resize', updatePortfolioTabOverflow);
+            updatePortfolioTabOverflow();
+            syncColumnPicker();
 
             updateStickyOffsets();
             updateSummaryForTab("Consolidated");
@@ -911,6 +963,12 @@
                 applyViewMode(activeViewMode);
                 updateStickyOffsets();
                 applyUsCurrencyForActiveTab();
+                syncColumnPicker();
+                updatePortfolioTabOverflow();
+            });
+
+            $('#columnVisibilityControl > summary').on('click', function () {
+                syncColumnPicker();
             });
 
             $('#portfolioTabs .nav-link').on('mouseenter', function () {

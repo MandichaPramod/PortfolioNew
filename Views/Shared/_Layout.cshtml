@@ -11,71 +11,48 @@
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
-        <div class="container-fluid">
-            <a class="navbar-brand fw-bold" asp-area="" asp-controller="Home" asp-action="Index">
-                <i class="fas fa-chart-line"></i> Portfolio Tracker
-            </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent"
-                aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarSupportedContent">
-                <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
-                    @if (User.Identity?.IsAuthenticated ?? false)
-                    {
-                        var displayName = User.FindFirst("display_name")?.Value ?? User.Identity?.Name ?? "User";
-                        var initials = string.Join("", displayName
-                            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                            .Select(s => s.Length > 0 ? s[0].ToString().ToUpperInvariant() : "")
-                            .Take(2));
-                        if (string.IsNullOrWhiteSpace(initials))
-                        {
-                            initials = "U";
-                        }
-                        <li class="nav-item">
-                            <a class="nav-link" asp-area="" asp-controller="Home" asp-action="Index">Dashboard</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" asp-area="" asp-controller="Summary" asp-action="Index">Summary</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" asp-area="" asp-controller="RealisedPnL" asp-action="Index">Realised P&amp;L</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" asp-area="" asp-controller="InvestmentDiary" asp-action="Index">Investment Diary</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" asp-area="" asp-controller="PortfolioDiary" asp-action="Index">Portfolio Diary</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
-                        </li>
-                        <li class="nav-item d-flex align-items-center me-2">
-                            <span class="nav-link d-flex align-items-center gap-2 user-pill">
-                                <span class="user-avatar">@initials</span>
-                                <span class="user-name">@displayName</span>
-                            </span>
-                        </li>
-                        <li class="nav-item d-flex align-items-center">
-                            <form asp-controller="Account" asp-action="Logout" method="post" class="m-0">
-                                @Html.AntiForgeryToken()
-                                <button class="btn btn-sm btn-outline-light" type="submit">
-                                    <i class="fas fa-right-from-bracket"></i> Logout
-                                </button>
-                            </form>
-                        </li>
-                    }
-                    else
-                    {
-                        <li class="nav-item">
-                            <a class="nav-link" asp-controller="Account" asp-action="Login">Login</a>
-                        </li>
-                    }
-                </ul>
+    <header class="navbar app-topbar">
+        <a class="app-brand" asp-area="" asp-controller="Home" asp-action="Index">
+            <span class="app-brand-mark" aria-hidden="true"></span>
+            <span class="app-brand-text">Portfolio</span>
+        </a>
+        @if (User.Identity?.IsAuthenticated ?? false)
+        {
+            var displayName = User.FindFirst("display_name")?.Value ?? User.Identity?.Name ?? "User";
+            var initials = string.Join("", displayName
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Select(s => s.Length > 0 ? s[0].ToString().ToUpperInvariant() : "")
+                .Take(2));
+            if (string.IsNullOrWhiteSpace(initials))
+            {
+                initials = "U";
+            }
+            <nav class="app-nav" aria-label="Primary">
+                <a class="@(Context.Request.Path == "/" || Context.Request.Path == "/Home" || Context.Request.Path == "/Home/Index" ? "active" : "")" asp-area="" asp-controller="Home" asp-action="Index">Dashboard</a>
+                <a class="@(Context.Request.Path.StartsWithSegments("/Summary") ? "active" : "")" asp-area="" asp-controller="Summary" asp-action="Index">Summary</a>
+                <a class="@(Context.Request.Path.StartsWithSegments("/RealisedPnL") ? "active" : "")" asp-area="" asp-controller="RealisedPnL" asp-action="Index">Realised P&amp;L</a>
+                <a class="@(Context.Request.Path.StartsWithSegments("/InvestmentDiary") ? "active" : "")" asp-area="" asp-controller="InvestmentDiary" asp-action="Index">Investment Diary</a>
+                <a class="@(Context.Request.Path.StartsWithSegments("/PortfolioDiary") ? "active" : "")" asp-area="" asp-controller="PortfolioDiary" asp-action="Index">Portfolio Diary</a>
+                <a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
+            </nav>
+            <div class="app-account">
+                <span class="app-user" title="@displayName">
+                    <span class="user-avatar">@initials</span>
+                    <span class="user-name">@displayName</span>
+                </span>
+                <form asp-controller="Account" asp-action="Logout" method="post" class="m-0">
+                    @Html.AntiForgeryToken()
+                    <button class="btn btn-sm btn-outline-light" type="submit">Sign out</button>
+                </form>
             </div>
-        </div>
-    </nav>
+        }
+        else
+        {
+            <nav class="app-nav app-nav-end" aria-label="Primary">
+                <a asp-controller="Account" asp-action="Login">Sign in</a>
+            </nav>
+        }
+    </header>
 
     <div class="page-wrapper">
         <main class="pb-4">
@@ -83,7 +60,7 @@
         </main>
     </div>
 
-    <footer class="bg-dark text-light text-center py-3 border-top border-secondary mt-5">
+    <footer class="app-footer bg-dark text-light text-center py-3 border-top border-secondary mt-5">
         <div class="container">
             &copy; 2026 - Portfolio Tracker | <a asp-area="" asp-controller="Home" asp-action="Privacy" class="text-light">Privacy</a>
         </div>
